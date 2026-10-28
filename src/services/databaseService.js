@@ -1,38 +1,38 @@
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../config/firebase.js';
+import { ref, get, set, update } from 'firebase/database';
+import { rtdb } from '../config/firebase.js';
 import { Player } from '../models/Player.js';
 
 export const databaseService = {
-  // Fetch existing save or initialize a new blank slate
+  // Fetch existing save or initialize a new blank slate via Realtime Database
   async getOrCreatePlayer(user) {
-    const playerDocRef = doc(db, 'players', user.uid);
-    const snap = await getDoc(playerDocRef);
+    const playerRef = ref(rtdb, `players/${user.uid}`);
+    const snap = await get(playerRef);
 
     if (snap.exists()) {
-      return Player.fromFirestore(snap.data());
+      return Player.fromFirestore(snap.val());
     }
 
-    // Initialize new blank slate profile
     const newPlayer = new Player(user.uid, user.displayName || 'Amnesiac Agent');
-    await setDoc(playerDocRef, newPlayer.toFirestore());
+    await set(playerRef, newPlayer.toFirestore());
     return newPlayer;
   },
 
   // Save current player state
   async savePlayerProgress(player) {
-    const playerDocRef = doc(db, 'players', player.uid);
-    await updateDoc(playerDocRef, player.toFirestore());
+    const playerRef = ref(rtdb, `players/${player.uid}`);
+    await update(playerRef, player.toFirestore());
   },
 
   // Add discovered anomaly to player's persistent log
   async recordClue(uid, clueId) {
-    const playerDocRef = doc(db, 'players', uid);
-    const snap = await getDoc(playerDocRef);
+    const playerRef = ref(rtdb, `players/${uid}`);
+    const snap = await get(playerRef);
     if (snap.exists()) {
-      const data = snap.data();
-      if (!data.cluesFound.includes(clueId)) {
-        const updatedClues = [...data.cluesFound, clueId];
-        await updateDoc(playerDocRef, { cluesFound: updatedClues, lastSaved: Date.now() });
+      const data = snap.val();
+      const clues = data.cluesFound || [];
+      if (!clues.includes(clueId)) {
+        clues.push(clueId);
+        await update(playerRef, { cluesFound: clues, lastSaved: Date.now() });
       }
     }
   }
