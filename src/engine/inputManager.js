@@ -9,12 +9,7 @@ export class InputManager {
       left: false,
       right: false,
       sprint: false,
-      jump: false,
-      // Arrow keys dedicated to camera rotation
-      arrowUp: false,
-      arrowDown: false,
-      arrowLeft: false,
-      arrowRight: false
+      jump: false
     };
 
     this.isPointerLocked = false;
@@ -44,39 +39,38 @@ export class InputManager {
 
   onKeyChange(code, isPressed) {
     switch (code) {
-      // WASD: Movement only
+      // Forward
       case 'KeyW':
+      case 'ArrowUp':
         this.keys.forward = isPressed;
         break;
+
+      // Backward
       case 'KeyS':
+      case 'ArrowDown':
         this.keys.backward = isPressed;
         break;
+
+      // Left (Strafe)
       case 'KeyA':
+      case 'ArrowLeft':
         this.keys.left = isPressed;
         break;
+
+      // Right (Strafe)
       case 'KeyD':
+      case 'ArrowRight':
         this.keys.right = isPressed;
         break;
+
+      // Actions
       case 'ShiftLeft':
       case 'ShiftRight':
         this.keys.sprint = isPressed;
         break;
+
       case 'Space':
         this.keys.jump = isPressed;
-        break;
-
-      // Arrow Keys: Look & Direction turning
-      case 'ArrowUp':
-        this.keys.arrowUp = isPressed;
-        break;
-      case 'ArrowDown':
-        this.keys.arrowDown = isPressed;
-        break;
-      case 'ArrowLeft':
-        this.keys.arrowLeft = isPressed;
-        break;
-      case 'ArrowRight':
-        this.keys.arrowRight = isPressed;
         break;
     }
   }

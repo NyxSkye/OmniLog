@@ -23,7 +23,9 @@ let isSolo = false;
 function renderInGameHUD() {
   const room = gameState.currentRoom;
   const isMultiplayer = !isSolo && room;
-  const players = isMultiplayer ? Object.values(room.players || {}) : [{ displayName: authState.currentUser?.displayName || 'Agent Solo', isHost: true }];
+  const players = isMultiplayer
+    ? Object.values(room.players || {})
+    : [{ displayName: authState.currentUser?.displayName || 'Agent Solo', isHost: true }];
 
   uiRoot.innerHTML = `
     <!-- Top-Right Docked Side HUD -->
@@ -45,10 +47,10 @@ function renderInGameHUD() {
     <!-- Bottom-Left Control Hints -->
     <div class="hud-controls-hint">
       <strong>CONTROLS:</strong><br>
-      • WASD: Move<br>
+      • WASD or ARROWS: Move / Strafe<br>
+      • MOUSE: Free Orbit Camera<br>
       • SPACE: Jump<br>
-      • SHIFT: Sprint<br>
-      • ARROWS / MOUSE: Orbit Camera & Direction
+      • SHIFT: Sprint
     </div>
   `;
 }
@@ -75,13 +77,10 @@ function init3DWorld() {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
-    // 1. Process Arrow-key camera rotation
-    cameraManager.handleKeyLook(inputManager.keys, deltaTime);
-
-    // 2. Update player physics (WASD + Jump) relative to camera angle
+    // 1. Update player physics (WASD / Arrows + Jump) relative to camera look angle
     localPlayer.update(deltaTime, inputManager.keys, cameraManager.yaw);
 
-    // 3. Update camera tracking & render
+    // 2. Track camera behind player & render frame
     cameraManager.update(localPlayer.getPosition());
     sceneManager.render(cameraManager.camera);
 

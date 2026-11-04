@@ -10,7 +10,7 @@ export class PlayerCharacter {
     this.speed = 7;
     this.sprintMultiplier = 1.6;
 
-    // Jump & Physics
+    // Jump & Vertical Physics
     this.velocityY = 0;
     this.gravity = -24;
     this.jumpForce = 9.5;
@@ -42,31 +42,42 @@ export class PlayerCharacter {
   update(deltaTime, keys, cameraYaw) {
     if (!this.isLocal) return;
 
-    // --- 1. Horizontal Movement (WASD) ---
-    let moveX = 0;
-    let moveZ = 0;
+    // --- 1. Movement Vector Relative to Camera Yaw ---
+    let inputX = 0; // -1 = Left, +1 = Right
+    let inputZ = 0; // -1 = Backward, +1 = Forward
 
-    if (keys.forward) moveZ -= 1;
-    if (keys.backward) moveZ += 1;
-    if (keys.left) moveX -= 1;
-    if (keys.right) moveX += 1;
+    if (keys.forward) inputZ += 1;
+    if (keys.backward) inputZ -= 1;
+    if (keys.left) inputX -= 1;
+    if (keys.right) inputX += 1;
 
-    if (moveX !== 0 || moveZ !== 0) {
-      const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
-      moveX /= length;
-      moveZ /= length;
+    const isMoving = inputX !== 0 || inputZ !== 0;
 
-      const cos = Math.cos(cameraYaw);
-      const sin = Math.sin(cameraYaw);
-      const worldX = moveX * cos - moveZ * sin;
-      const worldZ = moveX * sin + moveZ * cos;
+    if (isMoving) {
+      // Normalize diagonal movement speed
+      const length = Math.hypot(inputX, inputZ);
+      const normX = inputX / length;
+      const normZ = inputZ / length;
+
+      // The camera looks along (-sin(yaw), -cos(yaw)).
+      // Camera forward vector:
+      const forwardX = -Math.sin(cameraYaw);
+      const forwardZ = -Math.cos(cameraYaw);
+
+      // Camera right vector (perpendicular):
+      const rightX = Math.cos(cameraYaw);
+      const rightZ = -Math.sin(cameraYaw);
+
+      // Combine forward/backward with left/right strafe
+      const moveDirectionX = (forwardX * normZ) + (rightX * normX);
+      const moveDirectionZ = (forwardZ * normZ) + (rightZ * normX);
 
       const currentSpeed = (keys.sprint ? this.speed * this.sprintMultiplier : this.speed) * deltaTime;
-      this.group.position.x += worldX * currentSpeed;
-      this.group.position.z += worldZ * currentSpeed;
+      this.group.position.x += moveDirectionX * currentSpeed;
+      this.group.position.z += moveDirectionZ * currentSpeed;
 
-      const targetAngle = Math.atan2(worldX, worldZ);
-      this.group.rotation.y = targetAngle;
+      // Rotate avatar mesh to face movement direction
+      this.group.rotation.y = Math.atan2(moveDirectionX, moveDirectionZ);
     }
 
     // --- 2. Vertical Jump & Gravity ---
@@ -78,7 +89,6 @@ export class PlayerCharacter {
     this.velocityY += this.gravity * deltaTime;
     this.group.position.y += this.velocityY * deltaTime;
 
-    // Floor collision baseline at y = 0
     if (this.group.position.y <= 0) {
       this.group.position.y = 0;
       this.velocityY = 0;

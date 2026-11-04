@@ -32,16 +32,6 @@ export class CameraManager {
     this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch));
   }
 
-  handleKeyLook(keys, deltaTime) {
-    const keyTurnSpeed = 2.2; // Radians per sec
-    if (keys.arrowLeft) this.yaw += keyTurnSpeed * deltaTime;
-    if (keys.arrowRight) this.yaw -= keyTurnSpeed * deltaTime;
-    if (keys.arrowUp) this.pitch -= keyTurnSpeed * deltaTime * 0.7;
-    if (keys.arrowDown) this.pitch += keyTurnSpeed * deltaTime * 0.7;
-
-    this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch));
-  }
-
   update(targetPosition) {
     const offsetX = this.distance * Math.sin(this.yaw) * Math.cos(this.pitch);
     const offsetZ = this.distance * Math.cos(this.yaw) * Math.cos(this.pitch);
