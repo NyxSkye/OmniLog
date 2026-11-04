@@ -4,6 +4,7 @@ import { authState } from './state/authState.js';
 import { gameState } from './state/gameState.js';
 import { authUI } from './ui/authUI.js';
 import { lobbyUI } from './ui/lobbyUI.js';
+import { roomService, getAgentColor } from './services/roomService.js';
 
 import { SceneManager } from './engine/sceneManager.js';
 import { CameraManager } from './engine/cameraManager.js';
@@ -38,7 +39,10 @@ function renderInGameHUD() {
       <div class="hud-player-list">
         ${players.map(p => `
           <div class="hud-player-item">
-            <span>${p.displayName}</span>
+            <span style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#${(p.color || 0x00d9ff).toString(16).padStart(6, '0')};"></span>
+              ${p.displayName}
+            </span>
             <span style="color: #00d9ff; font-size: 0.7rem;">${p.isHost ? 'LEAD' : 'ACTIVE'}</span>
           </div>
         `).join('')}
@@ -61,21 +65,28 @@ function init3DWorld() {
   if (isGameRunning) return;
   isGameRunning = true;
 
+  const myColor = getAgentColor(authState.currentUser.uid);
+
   sceneManager = new SceneManager(canvas);
   cameraManager = new CameraManager();
-  localPlayer = new PlayerCharacter(sceneManager.scene, true, authState.currentUser?.displayName);
+  localPlayer = new PlayerCharacter(
+    sceneManager.scene,
+    true,
+    authState.currentUser?.displayName,
+    myColor
+  );
 
   inputManager = new InputManager(canvas, (deltaX, deltaY) => {
     cameraManager.handleMouseLook(deltaX, deltaY);
   });
 
-  // Enable Real-Time Network Sync if in multiplayer room
   if (!isSolo && gameState.roomCode && authState.currentUser) {
     networkSync = new NetworkSync(
       gameState.roomCode,
       authState.currentUser.uid,
       localPlayer,
-      sceneManager.scene
+      sceneManager.scene,
+      myColor
     );
   }
 
@@ -84,15 +95,12 @@ function init3DWorld() {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
-    // Local physics update
     localPlayer.update(deltaTime, inputManager.keys, cameraManager.yaw);
 
-    // Network broadcast & remote peer interpolation
     if (networkSync) {
       networkSync.update(currentTime, deltaTime);
     }
 
-    // Camera follow & render
     cameraManager.update(localPlayer.getPosition());
     sceneManager.render(cameraManager.camera);
 
@@ -110,7 +118,6 @@ function switchView(view) {
   }
 }
 
-// Navigation event routing
 uiRoot.addEventListener('nav-lobby', () => switchView('lobby'));
 uiRoot.addEventListener('nav-profile', () => switchView('auth'));
 
@@ -120,7 +127,6 @@ uiRoot.addEventListener('start-solo-game', () => {
   init3DWorld();
 });
 
-// React to multiplayer match launch
 gameState.subscribe((state) => {
   if (state.currentRoom && state.currentRoom.status === 'IN_PROGRESS') {
     isSolo = false;

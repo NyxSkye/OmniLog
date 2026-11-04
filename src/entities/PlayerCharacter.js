@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 
 export class PlayerCharacter {
-  constructor(scene, isLocal = true, displayName = 'Agent') {
+  constructor(scene, isLocal = true, displayName = 'Agent', color = 0x00d9ff) {
     this.scene = scene;
     this.isLocal = isLocal;
     this.displayName = displayName;
+    this.color = color;
 
     this.group = new THREE.Group();
     this.speed = 7;
@@ -25,23 +26,21 @@ export class PlayerCharacter {
   }
 
   buildMesh() {
-    // Body capsule (Cyan for local agent, Amber for teammates)
+    // Body capsule tinted with the character's unique designated color
     const bodyGeo = new THREE.CapsuleGeometry(0.5, 1.0, 8, 16);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: this.isLocal ? 0x00d9ff : 0xff9900,
-      roughness: 0.3,
-      metalness: 0.7
+      color: this.color,
+      roughness: 0.35,
+      metalness: 0.6
     });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 1.0;
     body.castShadow = true;
     this.group.add(body);
 
-    // Visor showing orientation
+    // Visor indicating orientation
     const visorGeo = new THREE.BoxGeometry(0.4, 0.15, 0.3);
-    const visorMat = new THREE.MeshBasicMaterial({ 
-      color: this.isLocal ? 0xffffff : 0x00ffff 
-    });
+    const visorMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const visor = new THREE.Mesh(visorGeo, visorMat);
     visor.position.set(0, 1.4, 0.4);
     this.group.add(visor);
@@ -86,7 +85,6 @@ export class PlayerCharacter {
       this.group.rotation.y = Math.atan2(moveDirectionX, moveDirectionZ);
     }
 
-    // Jumping & Gravity
     if (keys.jump && this.isGrounded) {
       this.velocityY = this.jumpForce;
       this.isGrounded = false;
@@ -102,13 +100,10 @@ export class PlayerCharacter {
     }
   }
 
-  // Smooth remote interpolation
   updateRemote(deltaTime) {
-    // Lerp position with a smooth factor
     const lerpFactor = Math.min(deltaTime * 18, 1);
     this.group.position.lerp(this.targetPosition, lerpFactor);
 
-    // Shortest-path angular interpolation
     let diff = this.targetRotationY - this.group.rotation.y;
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
