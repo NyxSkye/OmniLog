@@ -10,20 +10,25 @@ export class PlayerCharacter {
     this.speed = 7;
     this.sprintMultiplier = 1.6;
 
-    // Jump & Vertical Physics
+    // Jump & Physics
     this.velocityY = 0;
     this.gravity = -24;
     this.jumpForce = 9.5;
     this.isGrounded = true;
 
-    this.buildPlaceholderMesh();
+    // Remote network interpolation targets
+    this.targetPosition = new THREE.Vector3();
+    this.targetRotationY = 0;
+
+    this.buildMesh();
     this.scene.add(this.group);
   }
 
-  buildPlaceholderMesh() {
+  buildMesh() {
+    // Body capsule (Cyan for local agent, Amber for teammates)
     const bodyGeo = new THREE.CapsuleGeometry(0.5, 1.0, 8, 16);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: this.isLocal ? 0x00d9ff : 0xffaa00,
+      color: this.isLocal ? 0x00d9ff : 0xff9900,
       roughness: 0.3,
       metalness: 0.7
     });
@@ -32,19 +37,27 @@ export class PlayerCharacter {
     body.castShadow = true;
     this.group.add(body);
 
+    // Visor showing orientation
     const visorGeo = new THREE.BoxGeometry(0.4, 0.15, 0.3);
-    const visorMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const visorMat = new THREE.MeshBasicMaterial({ 
+      color: this.isLocal ? 0xffffff : 0x00ffff 
+    });
     const visor = new THREE.Mesh(visorGeo, visorMat);
     visor.position.set(0, 1.4, 0.4);
     this.group.add(visor);
   }
 
   update(deltaTime, keys, cameraYaw) {
-    if (!this.isLocal) return;
+    if (this.isLocal) {
+      this.updateLocal(deltaTime, keys, cameraYaw);
+    } else {
+      this.updateRemote(deltaTime);
+    }
+  }
 
-    // --- 1. Movement Vector Relative to Camera Yaw ---
-    let inputX = 0; // -1 = Left, +1 = Right
-    let inputZ = 0; // -1 = Backward, +1 = Forward
+  updateLocal(deltaTime, keys, cameraYaw) {
+    let inputX = 0;
+    let inputZ = 0;
 
     if (keys.forward) inputZ += 1;
     if (keys.backward) inputZ -= 1;
@@ -54,21 +67,15 @@ export class PlayerCharacter {
     const isMoving = inputX !== 0 || inputZ !== 0;
 
     if (isMoving) {
-      // Normalize diagonal movement speed
       const length = Math.hypot(inputX, inputZ);
       const normX = inputX / length;
       const normZ = inputZ / length;
 
-      // The camera looks along (-sin(yaw), -cos(yaw)).
-      // Camera forward vector:
       const forwardX = -Math.sin(cameraYaw);
       const forwardZ = -Math.cos(cameraYaw);
-
-      // Camera right vector (perpendicular):
       const rightX = Math.cos(cameraYaw);
       const rightZ = -Math.sin(cameraYaw);
 
-      // Combine forward/backward with left/right strafe
       const moveDirectionX = (forwardX * normZ) + (rightX * normX);
       const moveDirectionZ = (forwardZ * normZ) + (rightZ * normX);
 
@@ -76,11 +83,10 @@ export class PlayerCharacter {
       this.group.position.x += moveDirectionX * currentSpeed;
       this.group.position.z += moveDirectionZ * currentSpeed;
 
-      // Rotate avatar mesh to face movement direction
       this.group.rotation.y = Math.atan2(moveDirectionX, moveDirectionZ);
     }
 
-    // --- 2. Vertical Jump & Gravity ---
+    // Jumping & Gravity
     if (keys.jump && this.isGrounded) {
       this.velocityY = this.jumpForce;
       this.isGrounded = false;
@@ -96,11 +102,43 @@ export class PlayerCharacter {
     }
   }
 
+  // Smooth remote interpolation
+  updateRemote(deltaTime) {
+    // Lerp position with a smooth factor
+    const lerpFactor = Math.min(deltaTime * 18, 1);
+    this.group.position.lerp(this.targetPosition, lerpFactor);
+
+    // Shortest-path angular interpolation
+    let diff = this.targetRotationY - this.group.rotation.y;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    this.group.rotation.y += diff * lerpFactor;
+  }
+
+  setNetworkTransform(x, y, z, rotY) {
+    this.targetPosition.set(x, y, z);
+    this.targetRotationY = rotY;
+  }
+
   getPosition() {
     return this.group.position;
   }
 
   getRotation() {
     return this.group.rotation.y;
+  }
+
+  destroy() {
+    this.scene.remove(this.group);
+    this.group.traverse((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((m) => m.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    });
   }
 }

@@ -8,6 +8,7 @@ import { lobbyUI } from './ui/lobbyUI.js';
 import { SceneManager } from './engine/sceneManager.js';
 import { CameraManager } from './engine/cameraManager.js';
 import { InputManager } from './engine/inputManager.js';
+import { NetworkSync } from './engine/networkSync.js';
 import { PlayerCharacter } from './entities/PlayerCharacter.js';
 
 const uiRoot = document.getElementById('ui-root');
@@ -17,6 +18,7 @@ let sceneManager = null;
 let cameraManager = null;
 let inputManager = null;
 let localPlayer = null;
+let networkSync = null;
 let isGameRunning = false;
 let isSolo = false;
 
@@ -28,7 +30,6 @@ function renderInGameHUD() {
     : [{ displayName: authState.currentUser?.displayName || 'Agent Solo', isHost: true }];
 
   uiRoot.innerHTML = `
-    <!-- Docked Top-Right Squad Widget -->
     <div class="game-hud">
       <div class="game-hud-header">
         <span class="game-hud-title">${isMultiplayer ? 'Squad Chamber' : 'Solo Sector'}</span>
@@ -44,7 +45,6 @@ function renderInGameHUD() {
       </div>
     </div>
 
-    <!-- Controls Overlay -->
     <div class="hud-controls-hint">
       <strong>CONTROLS:</strong><br>
       • WASD or ARROWS: Move / Strafe<br>
@@ -69,12 +69,30 @@ function init3DWorld() {
     cameraManager.handleMouseLook(deltaX, deltaY);
   });
 
+  // Enable Real-Time Network Sync if in multiplayer room
+  if (!isSolo && gameState.roomCode && authState.currentUser) {
+    networkSync = new NetworkSync(
+      gameState.roomCode,
+      authState.currentUser.uid,
+      localPlayer,
+      sceneManager.scene
+    );
+  }
+
   let lastTime = performance.now();
   function gameLoop(currentTime) {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
+    // Local physics update
     localPlayer.update(deltaTime, inputManager.keys, cameraManager.yaw);
+
+    // Network broadcast & remote peer interpolation
+    if (networkSync) {
+      networkSync.update(currentTime, deltaTime);
+    }
+
+    // Camera follow & render
     cameraManager.update(localPlayer.getPosition());
     sceneManager.render(cameraManager.camera);
 
@@ -102,7 +120,7 @@ uiRoot.addEventListener('start-solo-game', () => {
   init3DWorld();
 });
 
-// React to multiplayer updates
+// React to multiplayer match launch
 gameState.subscribe((state) => {
   if (state.currentRoom && state.currentRoom.status === 'IN_PROGRESS') {
     isSolo = false;
@@ -120,6 +138,10 @@ authService.onAuthChange(async (user) => {
       console.error('Failed to sync player:', error);
     }
   } else {
+    if (networkSync) {
+      networkSync.destroy();
+      networkSync = null;
+    }
     authState.clear();
     gameState.clearRoom();
     switchView('auth');
