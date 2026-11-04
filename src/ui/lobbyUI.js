@@ -113,43 +113,35 @@ export const lobbyUI = {
     const currentUid = authState.currentUser?.uid;
     const playersMap = room.players || {};
 
-    // Sort players: CURRENT USER IS ALWAYS AT INDEX 0 (TOP)
+    // Sort players: Current user pinned to index 0 (top)
     const sortedPlayers = Object.values(playersMap).sort((a, b) => {
       if (a.uid === currentUid) return -1;
       if (b.uid === currentUid) return 1;
       return 0;
     });
 
+    const isCreator = room.hostUid === currentUid;
     const me = playersMap[currentUid];
-    const allReady = sortedPlayers.length >= 2 && sortedPlayers.every(p => p.isReady);
+    // Creator is always ready; others must click Confirm Ready
+    const allGuestsReady = sortedPlayers.filter(p => p.uid !== room.hostUid).every(p => p.isReady);
+    const canLaunch = isCreator && sortedPlayers.length >= 2 && allGuestsReady;
 
     const playerListHtml = sortedPlayers.map(p => {
       const isSelf = p.uid === currentUid;
-      const hp = p.hp || 100;
-      const maxHp = p.maxHp || 100;
-      const hpPercent = (hp / maxHp) * 100;
       const dotColor = (p.color || 0x00d9ff).toString(16).padStart(6, '0');
+      const isPlayerReady = p.uid === room.hostUid || p.isReady;
 
       return `
-        <div class="status-item ${isSelf ? 'player-item-self' : ''}" style="margin-bottom: 0.65rem; padding: 0.65rem;">
+        <div class="status-item ${isSelf ? 'player-item-self' : ''}" style="margin-bottom: 0.5rem; padding: 0.65rem;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="display: flex; align-items: center; gap: 0.4rem;">
               <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#${dotColor};"></span>
               <strong>${p.displayName}</strong>
               ${isSelf ? '<span class="you-badge">YOU</span>' : ''}
             </div>
-            <div style="font-size: 0.75rem; color: ${p.isReady ? '#48bb78' : '#e53e3e'}; font-weight: bold;">
-              ${p.isReady ? 'READY' : 'STANDBY'}
+            <div style="font-size: 0.75rem; color: ${isPlayerReady ? '#48bb78' : '#e53e3e'}; font-weight: bold;">
+              ${isPlayerReady ? 'READY' : 'STANDBY'}
             </div>
-          </div>
-
-          <!-- HP Bar under player info -->
-          <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: #718096; margin-top: 0.35rem;">
-            <span>HEALTH VITALITY</span>
-            <span style="color: #48bb78; font-weight: bold;">${hp} / ${maxHp} HP</span>
-          </div>
-          <div class="hp-bar-track">
-            <div class="hp-bar-fill" style="width: ${hpPercent}%;"></div>
           </div>
         </div>
       `;
@@ -172,28 +164,33 @@ export const lobbyUI = {
         </div>
 
         <div class="button-stack">
-          <button type="button" id="btn-toggle-ready">
-            ${me && me.isReady ? 'Cancel Ready' : 'Confirm Ready'}
-          </button>
-          <button type="button" id="btn-start-game" ${!allReady ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
-            ${sortedPlayers.length < 2 ? 'Awaiting Squad (Min 2 Players)' : allReady ? 'Launch Incursion' : 'Awaiting Squad Readiness'}
-          </button>
+          ${!isCreator ? `
+            <button type="button" id="btn-toggle-ready">
+              ${me && me.isReady ? 'Cancel Ready' : 'Confirm Ready'}
+            </button>
+          ` : `
+            <button type="button" id="btn-start-game" ${!canLaunch ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
+              ${sortedPlayers.length < 2 ? 'Awaiting Squad (Min 2 Players)' : canLaunch ? 'Launch Incursion' : 'Awaiting Squad Readiness'}
+            </button>
+          `}
           <button type="button" id="btn-leave-room" class="secondary">Leave Chamber</button>
         </div>
       </div>
     `;
 
-    document.getElementById('btn-toggle-ready').addEventListener('click', async () => {
-      if (me) {
-        await roomService.toggleReady(code, currentUid, me.isReady);
-      }
-    });
-
-    const startBtn = document.getElementById('btn-start-game');
-    if (allReady && startBtn) {
-      startBtn.addEventListener('click', async () => {
-        await roomService.startGame(code);
+    if (!isCreator) {
+      document.getElementById('btn-toggle-ready').addEventListener('click', async () => {
+        if (me) {
+          await roomService.toggleReady(code, currentUid, me.isReady);
+        }
       });
+    } else {
+      const startBtn = document.getElementById('btn-start-game');
+      if (canLaunch && startBtn) {
+        startBtn.addEventListener('click', async () => {
+          await roomService.startGame(code);
+        });
+      }
     }
 
     document.getElementById('btn-leave-room').addEventListener('click', async () => {

@@ -31,7 +31,7 @@ function renderInGameHUD() {
   let players = [];
   if (isMultiplayer) {
     const rawList = Object.values(room.players || {});
-    // Always pin current player to index 0
+    // Pin local player to index 0
     players = rawList.sort((a, b) => {
       if (a.uid === currentUid) return -1;
       if (b.uid === currentUid) return 1;
@@ -47,7 +47,7 @@ function renderInGameHUD() {
   }
 
   uiRoot.innerHTML = `
-    <!-- Top-Right Docked Squad HUD -->
+    <!-- Top-Right Docked Squad HUD (HP Active, No Host Info) -->
     <div class="game-hud">
       <div class="game-hud-header">
         <span class="game-hud-title">${isMultiplayer ? 'Squad Chamber' : 'Solo Sector'}</span>
