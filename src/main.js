@@ -26,29 +26,60 @@ let isSolo = false;
 function renderInGameHUD() {
   const room = gameState.currentRoom;
   const isMultiplayer = !isSolo && room;
-  const players = isMultiplayer 
-    ? Object.values(room.players || {}) 
-    : [{ displayName: authState.currentUser?.displayName || 'Agent Solo', isHost: true }];
+  const currentUid = authState.currentUser?.uid;
+
+  let players = [];
+  if (isMultiplayer) {
+    const rawList = Object.values(room.players || {});
+    // Always pin current player to index 0
+    players = rawList.sort((a, b) => {
+      if (a.uid === currentUid) return -1;
+      if (b.uid === currentUid) return 1;
+      return 0;
+    });
+  } else {
+    players = [{
+      uid: currentUid,
+      displayName: authState.currentUser?.displayName || 'Agent Solo',
+      hp: 100,
+      maxHp: 100
+    }];
+  }
 
   uiRoot.innerHTML = `
+    <!-- Top-Right Docked Squad HUD -->
     <div class="game-hud">
       <div class="game-hud-header">
         <span class="game-hud-title">${isMultiplayer ? 'Squad Chamber' : 'Solo Sector'}</span>
         ${isMultiplayer ? `<span class="game-hud-code">${gameState.roomCode}</span>` : '<span style="color:#718096">OFFLINE</span>'}
       </div>
       <div class="hud-player-list">
-        ${players.map(p => `
-          <div class="hud-player-item">
-            <span style="display: flex; align-items: center; gap: 0.4rem;">
-              <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#${(p.color || 0x00d9ff).toString(16).padStart(6, '0')};"></span>
-              ${p.displayName}
-            </span>
-            <span style="color: #00d9ff; font-size: 0.7rem;">${p.isHost ? 'LEAD' : 'ACTIVE'}</span>
-          </div>
-        `).join('')}
+        ${players.map(p => {
+          const isSelf = p.uid === currentUid;
+          const hp = p.hp || 100;
+          const maxHp = p.maxHp || 100;
+          const hpPercent = (hp / maxHp) * 100;
+          const dotColor = (p.color || 0x00d9ff).toString(16).padStart(6, '0');
+
+          return `
+            <div style="padding: 0.35rem 0.5rem; background: ${isSelf ? 'rgba(0,217,255,0.08)' : 'transparent'}; border-left: 2px solid #${dotColor}; margin-bottom: 0.3rem;">
+              <div class="hud-player-item">
+                <span style="display: flex; align-items: center; gap: 0.4rem;">
+                  <strong>${p.displayName}</strong>
+                  ${isSelf ? '<span class="you-badge">YOU</span>' : ''}
+                </span>
+                <span style="color: #48bb78; font-size: 0.7rem; font-weight: bold;">${hp}/${maxHp}</span>
+              </div>
+              <div class="hp-bar-track">
+                <div class="hp-bar-fill" style="width: ${hpPercent}%;"></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
       </div>
     </div>
 
+    <!-- Controls Overlay -->
     <div class="hud-controls-hint">
       <strong>CONTROLS:</strong><br>
       • WASD or ARROWS: Move / Strafe<br>
@@ -73,7 +104,9 @@ function init3DWorld() {
     sceneManager.scene,
     true,
     authState.currentUser?.displayName,
-    myColor
+    myColor,
+    100,
+    100
   );
 
   inputManager = new InputManager(canvas, (deltaX, deltaY) => {

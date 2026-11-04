@@ -3,15 +3,14 @@ import { rtdb } from '../config/firebase.js';
 import { GameSession } from '../models/GameSession.js';
 
 const CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const ROOM_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
-// Deterministic bright hue generator from UID so appearances always match across clients
 export function getAgentColor(uid) {
   let hash = 0;
   for (let i = 0; i < uid.length; i++) {
     hash = uid.charCodeAt(i) + ((hash << 5) - hash);
   }
   const hue = Math.abs(hash) % 360;
-  // Convert HSL to Hex number (e.g. 0x33ccff)
   const c = 0.8;
   const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
   let r = 0, g = 0, b = 0;
@@ -21,7 +20,7 @@ export function getAgentColor(uid) {
   else if (hue < 240) { g = x; b = c; }
   else if (hue < 300) { r = x; b = c; }
   else { r = c; b = x; }
-  
+
   return (Math.round((r + 0.2) * 255) << 16) +
          (Math.round((g + 0.2) * 255) << 8) +
          Math.round((b + 0.2) * 255);
@@ -55,13 +54,16 @@ export const roomService = {
 
     const roomRef = ref(rtdb, `rooms/${roomCode}`);
     const color = getAgentColor(hostUser.uid);
-    const session = new GameSession(roomCode, hostUser.uid, hostUser.displayName || 'Agent Host');
+    const session = new GameSession(roomCode, hostUser.uid, hostUser.displayName || 'Agent');
+    
     session.players[hostUser.uid].color = color;
     session.players[hostUser.uid].online = true;
+    session.players[hostUser.uid].hp = 100;
+    session.players[hostUser.uid].maxHp = 100;
 
     await set(roomRef, session.toJSON());
 
-    // Flag offline on disconnect rather than wiping the room
+    // Flag offline on network disconnect
     const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${hostUser.uid}/online`);
     onDisconnect(onlineRef).set(false);
 
@@ -81,27 +83,39 @@ export const roomService = {
     }
 
     const roomData = snap.val();
+    const now = Date.now();
+
+    // 5-minute empty room expiration check
+    if (roomData.emptySince && (now - roomData.emptySince > ROOM_EXPIRY_MS)) {
+      await remove(roomRef);
+      await remove(ref(rtdb, `rooms/${roomCode}/transforms`));
+      throw new Error(`Room [${roomCode}] has expired due to 5 minutes of inactivity.`);
+    }
+
     const existingPlayer = roomData.players && roomData.players[user.uid];
 
-    // Case 1: Reconnecting to an existing or ongoing match
+    // Rejoining an existing slot
     if (existingPlayer) {
       await update(ref(rtdb, `rooms/${roomCode}/players/${user.uid}`), {
         online: true,
         displayName: user.displayName || existingPlayer.displayName
       });
+      // Clear empty timer if active
+      await update(ref(rtdb, `rooms/${roomCode}`), { emptySince: null });
+
       const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}/online`);
       onDisconnect(onlineRef).set(false);
       return roomData;
     }
 
-    // Case 2: New joiner validations
+    // Joining new slot
     if (roomData.status !== 'LOBBY') {
-      throw new Error('Mission already in progress. Only existing members can rejoin.');
+      throw new Error('Mission already in progress. Only existing squad members can rejoin.');
     }
 
     const currentCount = Object.keys(roomData.players || {}).length;
     if (currentCount >= (roomData.maxPlayers || 8)) {
-      throw new Error('Room is at maximum capacity (8 players).');
+      throw new Error('Chamber is at maximum capacity (8 players).');
     }
 
     const color = getAgentColor(user.uid);
@@ -109,12 +123,15 @@ export const roomService = {
     await set(playerRef, {
       uid: user.uid,
       displayName: user.displayName || 'Agent Guest',
-      isHost: false,
       isReady: false,
       color: color,
+      hp: 100,
+      maxHp: 100,
       online: true,
       joinedAt: Date.now()
     });
+
+    await update(ref(rtdb, `rooms/${roomCode}`), { emptySince: null });
 
     const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}/online`);
     onDisconnect(onlineRef).set(false);
@@ -150,7 +167,10 @@ export const roomService = {
 
     const remainingUids = Object.keys(players);
     if (remainingUids.length === 0) {
-      await remove(roomRef);
+      // Mark empty timestamp to start the 5-minute expiry window
+      await update(ref(rtdb, `rooms/${roomCode}`), {
+        emptySince: Date.now()
+      });
       await remove(ref(rtdb, `rooms/${roomCode}/transforms`));
     } else {
       const updates = {};
@@ -158,9 +178,7 @@ export const roomService = {
       updates[`rooms/${roomCode}/transforms/${uid}`] = null;
 
       if (data.hostUid === uid) {
-        const nextHostUid = remainingUids[0];
-        updates[`rooms/${roomCode}/hostUid`] = nextHostUid;
-        updates[`rooms/${roomCode}/players/${nextHostUid}/isHost`] = true;
+        updates[`rooms/${roomCode}/hostUid`] = remainingUids[0];
       }
       await update(ref(rtdb), updates);
     }

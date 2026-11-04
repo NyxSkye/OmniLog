@@ -44,6 +44,8 @@ export class NetworkSync {
       rotY: Number(rotY.toFixed(3)),
       color: this.playerColor,
       displayName: this.localPlayer.displayName,
+      hp: this.localPlayer.hp,
+      maxHp: this.localPlayer.maxHp,
       t: Date.now()
     });
   }
@@ -60,7 +62,9 @@ export class NetworkSync {
           this.scene,
           false,
           data.displayName || 'Ally',
-          data.color || 0xff9900
+          data.color || 0xff9900,
+          data.hp ?? 100,
+          data.maxHp ?? 100
         );
         remoteAgent.group.position.set(data.x, data.y, data.z);
         remoteAgent.group.rotation.y = data.rotY;
@@ -69,6 +73,13 @@ export class NetworkSync {
       } else {
         const remoteAgent = this.remotePlayers.get(uid);
         remoteAgent.setNetworkTransform(data.x, data.y, data.z, data.rotY);
+        if (data.maxHp !== undefined && remoteAgent.maxHp !== data.maxHp) {
+          remoteAgent.maxHp = data.maxHp;
+          remoteAgent.redrawNameplate();
+        }
+        if (data.hp !== undefined && remoteAgent.hp !== data.hp) {
+          remoteAgent.setHp(data.hp);
+        }
       }
     }
 

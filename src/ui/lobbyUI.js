@@ -14,8 +14,6 @@ export const lobbyUI = {
 
   render() {
     if (!this.container) return;
-
-    // If the game has launched, prevent the lobby from overwriting the in-game HUD
     if (gameState.isInGame) return;
 
     if (gameState.currentRoom) {
@@ -101,7 +99,7 @@ export const lobbyUI = {
     gameState.unsubscribeRoom = roomService.subscribeToRoom(code, (data) => {
       if (!data) {
         gameState.clearRoom();
-        this.errorMessage = 'Room disbanded by host.';
+        this.errorMessage = 'Room was disbanded or expired.';
         this.render();
         return;
       }
@@ -113,22 +111,49 @@ export const lobbyUI = {
     const room = gameState.currentRoom;
     const code = gameState.roomCode;
     const currentUid = authState.currentUser?.uid;
-    const players = Object.values(room.players || {});
-    const isHost = room.hostUid === currentUid;
-    const me = room.players ? room.players[currentUid] : null;
+    const playersMap = room.players || {};
 
-    const allReady = players.length >= 2 && players.every(p => p.isReady || p.isHost);
+    // Sort players: CURRENT USER IS ALWAYS AT INDEX 0 (TOP)
+    const sortedPlayers = Object.values(playersMap).sort((a, b) => {
+      if (a.uid === currentUid) return -1;
+      if (b.uid === currentUid) return 1;
+      return 0;
+    });
 
-    const playerListHtml = players.map(p => `
-      <div class="status-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <div>
-          <strong>${p.displayName}</strong> ${p.isHost ? '<span style="color:#00d9ff; font-size:0.7rem;">[HOST]</span>' : ''}
+    const me = playersMap[currentUid];
+    const allReady = sortedPlayers.length >= 2 && sortedPlayers.every(p => p.isReady);
+
+    const playerListHtml = sortedPlayers.map(p => {
+      const isSelf = p.uid === currentUid;
+      const hp = p.hp || 100;
+      const maxHp = p.maxHp || 100;
+      const hpPercent = (hp / maxHp) * 100;
+      const dotColor = (p.color || 0x00d9ff).toString(16).padStart(6, '0');
+
+      return `
+        <div class="status-item ${isSelf ? 'player-item-self' : ''}" style="margin-bottom: 0.65rem; padding: 0.65rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#${dotColor};"></span>
+              <strong>${p.displayName}</strong>
+              ${isSelf ? '<span class="you-badge">YOU</span>' : ''}
+            </div>
+            <div style="font-size: 0.75rem; color: ${p.isReady ? '#48bb78' : '#e53e3e'}; font-weight: bold;">
+              ${p.isReady ? 'READY' : 'STANDBY'}
+            </div>
+          </div>
+
+          <!-- HP Bar under player info -->
+          <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: #718096; margin-top: 0.35rem;">
+            <span>HEALTH VITALITY</span>
+            <span style="color: #48bb78; font-weight: bold;">${hp} / ${maxHp} HP</span>
+          </div>
+          <div class="hp-bar-track">
+            <div class="hp-bar-fill" style="width: ${hpPercent}%;"></div>
+          </div>
         </div>
-        <div style="font-size: 0.75rem; color: ${p.isReady || p.isHost ? '#48bb78' : '#e53e3e'}; font-weight: bold;">
-          ${p.isHost ? 'COMMANDER' : p.isReady ? 'READY' : 'STANDBY'}
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     this.container.innerHTML = `
       <div class="panel">
@@ -136,44 +161,39 @@ export const lobbyUI = {
         <p class="subtitle" style="margin-bottom: 0.5rem;">Secure Relay Code:</p>
         <div style="background: #0d1522; padding: 0.75rem; text-align: center; border: 1px dashed #00d9ff; margin-bottom: 1rem;">
           <span style="font-size: 1.75rem; letter-spacing: 0.25em; color: #00f0ff; font-weight: bold;">${code}</span>
-          <div style="font-size: 0.7rem; color: #718096; margin-top: 0.25rem;">Share with up to 7 allies (Case-Sensitive)</div>
+          <div style="font-size: 0.7rem; color: #718096; margin-top: 0.25rem;">Share with allies (Expires after 5 min empty)</div>
         </div>
 
         <div style="margin-bottom: 1rem;">
-          <label>Active Agents (${players.length} / 8)</label>
-          <div style="max-height: 180px; overflow-y: auto; margin-top: 0.5rem;">
+          <label>Squad Manifest (${sortedPlayers.length} / 8)</label>
+          <div style="max-height: 220px; overflow-y: auto; margin-top: 0.5rem;">
             ${playerListHtml}
           </div>
         </div>
 
         <div class="button-stack">
-          ${!isHost ? `
-            <button type="button" id="btn-toggle-ready">
-              ${me && me.isReady ? 'Cancel Ready' : 'Confirm Ready'}
-            </button>
-          ` : `
-            <button type="button" id="btn-start-game" ${!allReady ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
-              ${players.length < 2 ? 'Awaiting Squad (Min 2 Players)' : allReady ? 'Launch Incursion' : 'Awaiting Member Readiness'}
-            </button>
-          `}
+          <button type="button" id="btn-toggle-ready">
+            ${me && me.isReady ? 'Cancel Ready' : 'Confirm Ready'}
+          </button>
+          <button type="button" id="btn-start-game" ${!allReady ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
+            ${sortedPlayers.length < 2 ? 'Awaiting Squad (Min 2 Players)' : allReady ? 'Launch Incursion' : 'Awaiting Squad Readiness'}
+          </button>
           <button type="button" id="btn-leave-room" class="secondary">Leave Chamber</button>
         </div>
       </div>
     `;
 
-    if (!isHost) {
-      document.getElementById('btn-toggle-ready').addEventListener('click', async () => {
-        if (me) {
-          await roomService.toggleReady(code, currentUid, me.isReady);
-        }
-      });
-    } else {
-      const startBtn = document.getElementById('btn-start-game');
-      if (allReady && startBtn) {
-        startBtn.addEventListener('click', async () => {
-          await roomService.startGame(code);
-        });
+    document.getElementById('btn-toggle-ready').addEventListener('click', async () => {
+      if (me) {
+        await roomService.toggleReady(code, currentUid, me.isReady);
       }
+    });
+
+    const startBtn = document.getElementById('btn-start-game');
+    if (allReady && startBtn) {
+      startBtn.addEventListener('click', async () => {
+        await roomService.startGame(code);
+      });
     }
 
     document.getElementById('btn-leave-room').addEventListener('click', async () => {
