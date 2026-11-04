@@ -15,6 +15,9 @@ export const lobbyUI = {
   render() {
     if (!this.container) return;
 
+    // If the game has launched, prevent the lobby from overwriting the in-game HUD
+    if (gameState.isInGame) return;
+
     if (gameState.currentRoom) {
       this.renderActiveLobby();
     } else {
@@ -97,9 +100,9 @@ export const lobbyUI = {
 
     gameState.unsubscribeRoom = roomService.subscribeToRoom(code, (data) => {
       if (!data) {
-        // Room was closed/removed
         gameState.clearRoom();
         this.errorMessage = 'Room disbanded by host.';
+        this.render();
         return;
       }
       gameState.setRoom(code, data);
@@ -109,7 +112,7 @@ export const lobbyUI = {
   renderActiveLobby() {
     const room = gameState.currentRoom;
     const code = gameState.roomCode;
-    const currentUid = authState.currentUser.uid;
+    const currentUid = authState.currentUser?.uid;
     const players = Object.values(room.players || {});
     const isHost = room.hostUid === currentUid;
     const me = room.players ? room.players[currentUid] : null;
@@ -166,7 +169,7 @@ export const lobbyUI = {
       });
     } else {
       const startBtn = document.getElementById('btn-start-game');
-      if (allReady) {
+      if (allReady && startBtn) {
         startBtn.addEventListener('click', async () => {
           await roomService.startGame(code);
         });

@@ -2,6 +2,7 @@ export const gameState = {
   currentRoom: null,
   roomCode: null,
   unsubscribeRoom: null,
+  isInGame: false,
   listeners: new Set(),
 
   subscribe(listener) {
@@ -18,6 +19,14 @@ export const gameState = {
   setRoom(roomCode, roomData) {
     this.roomCode = roomCode;
     this.currentRoom = roomData;
+    if (roomData && roomData.status === 'IN_PROGRESS') {
+      this.isInGame = true;
+    }
+    this.notify();
+  },
+
+  setInGame(val) {
+    this.isInGame = val;
     this.notify();
   },
 
@@ -28,6 +37,7 @@ export const gameState = {
     }
     this.currentRoom = null;
     this.roomCode = null;
+    this.isInGame = false;
     this.notify();
   }
 };

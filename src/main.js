@@ -23,12 +23,12 @@ let isSolo = false;
 function renderInGameHUD() {
   const room = gameState.currentRoom;
   const isMultiplayer = !isSolo && room;
-  const players = isMultiplayer
-    ? Object.values(room.players || {})
+  const players = isMultiplayer 
+    ? Object.values(room.players || {}) 
     : [{ displayName: authState.currentUser?.displayName || 'Agent Solo', isHost: true }];
 
   uiRoot.innerHTML = `
-    <!-- Top-Right Docked Side HUD -->
+    <!-- Docked Top-Right Squad Widget -->
     <div class="game-hud">
       <div class="game-hud-header">
         <span class="game-hud-title">${isMultiplayer ? 'Squad Chamber' : 'Solo Sector'}</span>
@@ -44,7 +44,7 @@ function renderInGameHUD() {
       </div>
     </div>
 
-    <!-- Bottom-Left Control Hints -->
+    <!-- Controls Overlay -->
     <div class="hud-controls-hint">
       <strong>CONTROLS:</strong><br>
       • WASD or ARROWS: Move / Strafe<br>
@@ -56,10 +56,9 @@ function renderInGameHUD() {
 }
 
 function init3DWorld() {
-  if (isGameRunning) {
-    renderInGameHUD();
-    return;
-  }
+  renderInGameHUD();
+
+  if (isGameRunning) return;
   isGameRunning = true;
 
   sceneManager = new SceneManager(canvas);
@@ -70,17 +69,12 @@ function init3DWorld() {
     cameraManager.handleMouseLook(deltaX, deltaY);
   });
 
-  renderInGameHUD();
-
   let lastTime = performance.now();
   function gameLoop(currentTime) {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
-    // 1. Update player physics (WASD / Arrows + Jump) relative to camera look angle
     localPlayer.update(deltaTime, inputManager.keys, cameraManager.yaw);
-
-    // 2. Track camera behind player & render frame
     cameraManager.update(localPlayer.getPosition());
     sceneManager.render(cameraManager.camera);
 
@@ -90,6 +84,7 @@ function init3DWorld() {
 }
 
 function switchView(view) {
+  if (gameState.isInGame) return;
   if (view === 'auth') {
     authUI.init(uiRoot);
   } else if (view === 'lobby') {
@@ -103,10 +98,11 @@ uiRoot.addEventListener('nav-profile', () => switchView('auth'));
 
 uiRoot.addEventListener('start-solo-game', () => {
   isSolo = true;
+  gameState.setInGame(true);
   init3DWorld();
 });
 
-// React to multiplayer match launch or player roster updates
+// React to multiplayer updates
 gameState.subscribe((state) => {
   if (state.currentRoom && state.currentRoom.status === 'IN_PROGRESS') {
     isSolo = false;
