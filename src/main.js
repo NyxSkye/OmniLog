@@ -5,7 +5,6 @@ import { gameState } from './state/gameState.js';
 import { authUI } from './ui/authUI.js';
 import { lobbyUI } from './ui/lobbyUI.js';
 
-// 3D Engine imports
 import { SceneManager } from './engine/sceneManager.js';
 import { CameraManager } from './engine/cameraManager.js';
 import { InputManager } from './engine/inputManager.js';
@@ -19,32 +18,70 @@ let cameraManager = null;
 let inputManager = null;
 let localPlayer = null;
 let isGameRunning = false;
+let isSolo = false;
+
+function renderInGameHUD() {
+  const room = gameState.currentRoom;
+  const isMultiplayer = !isSolo && room;
+  const players = isMultiplayer ? Object.values(room.players || {}) : [{ displayName: authState.currentUser?.displayName || 'Agent Solo', isHost: true }];
+
+  uiRoot.innerHTML = `
+    <!-- Top-Right Docked Side HUD -->
+    <div class="game-hud">
+      <div class="game-hud-header">
+        <span class="game-hud-title">${isMultiplayer ? 'Squad Chamber' : 'Solo Sector'}</span>
+        ${isMultiplayer ? `<span class="game-hud-code">${gameState.roomCode}</span>` : '<span style="color:#718096">OFFLINE</span>'}
+      </div>
+      <div class="hud-player-list">
+        ${players.map(p => `
+          <div class="hud-player-item">
+            <span>${p.displayName}</span>
+            <span style="color: #00d9ff; font-size: 0.7rem;">${p.isHost ? 'LEAD' : 'ACTIVE'}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Bottom-Left Control Hints -->
+    <div class="hud-controls-hint">
+      <strong>CONTROLS:</strong><br>
+      • WASD: Move<br>
+      • SPACE: Jump<br>
+      • SHIFT: Sprint<br>
+      • ARROWS / MOUSE: Orbit Camera & Direction
+    </div>
+  `;
+}
 
 function init3DWorld() {
-  if (isGameRunning) return;
+  if (isGameRunning) {
+    renderInGameHUD();
+    return;
+  }
   isGameRunning = true;
 
   sceneManager = new SceneManager(canvas);
   cameraManager = new CameraManager();
-  localPlayer = new PlayerCharacter(sceneManager.scene, true, authState.currentUser.displayName);
+  localPlayer = new PlayerCharacter(sceneManager.scene, true, authState.currentUser?.displayName);
 
   inputManager = new InputManager(canvas, (deltaX, deltaY) => {
     cameraManager.handleMouseLook(deltaX, deltaY);
   });
 
-  // Hide the UI panel so the 3D viewport takes over
-  uiRoot.innerHTML = `
-    <div style="position: absolute; top: 1rem; left: 1rem; color: #00d9ff; font-family: monospace; font-size: 0.85rem; pointer-events: none; background: rgba(5,7,10,0.7); padding: 0.5rem 1rem; border: 1px solid #1a365d;">
-      CLICK TO LOCK MOUSE // WASD TO MOVE // SHIFT TO SPRINT
-    </div>
-  `;
+  renderInGameHUD();
 
   let lastTime = performance.now();
   function gameLoop(currentTime) {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
+    // 1. Process Arrow-key camera rotation
+    cameraManager.handleKeyLook(inputManager.keys, deltaTime);
+
+    // 2. Update player physics (WASD + Jump) relative to camera angle
     localPlayer.update(deltaTime, inputManager.keys, cameraManager.yaw);
+
+    // 3. Update camera tracking & render
     cameraManager.update(localPlayer.getPosition());
     sceneManager.render(cameraManager.camera);
 
@@ -61,11 +98,19 @@ function switchView(view) {
   }
 }
 
+// Navigation event routing
 uiRoot.addEventListener('nav-lobby', () => switchView('lobby'));
 uiRoot.addEventListener('nav-profile', () => switchView('auth'));
 
+uiRoot.addEventListener('start-solo-game', () => {
+  isSolo = true;
+  init3DWorld();
+});
+
+// React to multiplayer match launch or player roster updates
 gameState.subscribe((state) => {
   if (state.currentRoom && state.currentRoom.status === 'IN_PROGRESS') {
+    isSolo = false;
     init3DWorld();
   }
 });

@@ -9,10 +9,9 @@ export class CameraManager {
       500
     );
 
-    // Spherical orbit parameters
     this.distance = 6;
-    this.pitch = 0.25; // Vertical angle (radians)
-    this.yaw = 0;      // Horizontal angle (radians)
+    this.pitch = 0.25;
+    this.yaw = 0;
 
     this.minPitch = -0.2;
     this.maxPitch = Math.PI / 2.5;
@@ -30,28 +29,33 @@ export class CameraManager {
     const sensitivity = 0.0025;
     this.yaw -= deltaX * sensitivity;
     this.pitch += deltaY * sensitivity;
+    this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch));
+  }
 
-    // Clamp vertical look
+  handleKeyLook(keys, deltaTime) {
+    const keyTurnSpeed = 2.2; // Radians per sec
+    if (keys.arrowLeft) this.yaw += keyTurnSpeed * deltaTime;
+    if (keys.arrowRight) this.yaw -= keyTurnSpeed * deltaTime;
+    if (keys.arrowUp) this.pitch -= keyTurnSpeed * deltaTime * 0.7;
+    if (keys.arrowDown) this.pitch += keyTurnSpeed * deltaTime * 0.7;
+
     this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch));
   }
 
   update(targetPosition) {
-    // Calculate ideal camera position based on orbit angles
     const offsetX = this.distance * Math.sin(this.yaw) * Math.cos(this.pitch);
     const offsetZ = this.distance * Math.cos(this.yaw) * Math.cos(this.pitch);
     const offsetY = this.distance * Math.sin(this.pitch);
 
     const desiredPosition = new THREE.Vector3(
       targetPosition.x + offsetX,
-      targetPosition.y + offsetY + 1.6, // Eye height
+      targetPosition.y + offsetY + 1.6,
       targetPosition.z + offsetZ
     );
 
-    // Smooth interpolation (lerp)
     this.currentPosition.lerp(desiredPosition, 0.15);
     this.camera.position.copy(this.currentPosition);
 
-    // Aim point at upper torso
     const desiredLookAt = new THREE.Vector3(
       targetPosition.x,
       targetPosition.y + 1.3,

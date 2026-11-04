@@ -8,7 +8,13 @@ export class InputManager {
       backward: false,
       left: false,
       right: false,
-      sprint: false
+      sprint: false,
+      jump: false,
+      // Arrow keys dedicated to camera rotation
+      arrowUp: false,
+      arrowDown: false,
+      arrowLeft: false,
+      arrowRight: false
     };
 
     this.isPointerLocked = false;
@@ -16,7 +22,6 @@ export class InputManager {
   }
 
   initEvents() {
-    // Request pointer lock on canvas click
     this.canvas.addEventListener('click', () => {
       if (!this.isPointerLocked) {
         this.canvas.requestPointerLock();
@@ -27,39 +32,51 @@ export class InputManager {
       this.isPointerLocked = document.pointerLockElement === this.canvas;
     });
 
-    // Mouse movement
     document.addEventListener('mousemove', (e) => {
       if (this.isPointerLocked && this.onMouseLook) {
         this.onMouseLook(e.movementX, e.movementY);
       }
     });
 
-    // Keydown
     window.addEventListener('keydown', (e) => this.onKeyChange(e.code, true));
     window.addEventListener('keyup', (e) => this.onKeyChange(e.code, false));
   }
 
   onKeyChange(code, isPressed) {
     switch (code) {
+      // WASD: Movement only
       case 'KeyW':
-      case 'ArrowUp':
         this.keys.forward = isPressed;
         break;
       case 'KeyS':
-      case 'ArrowDown':
         this.keys.backward = isPressed;
         break;
       case 'KeyA':
-      case 'ArrowLeft':
         this.keys.left = isPressed;
         break;
       case 'KeyD':
-      case 'ArrowRight':
         this.keys.right = isPressed;
         break;
       case 'ShiftLeft':
       case 'ShiftRight':
         this.keys.sprint = isPressed;
+        break;
+      case 'Space':
+        this.keys.jump = isPressed;
+        break;
+
+      // Arrow Keys: Look & Direction turning
+      case 'ArrowUp':
+        this.keys.arrowUp = isPressed;
+        break;
+      case 'ArrowDown':
+        this.keys.arrowDown = isPressed;
+        break;
+      case 'ArrowLeft':
+        this.keys.arrowLeft = isPressed;
+        break;
+      case 'ArrowRight':
+        this.keys.arrowRight = isPressed;
         break;
     }
   }

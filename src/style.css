@@ -152,3 +152,70 @@ button.secondary:hover {
   font-size: 0.7rem;
   color: #718096;
 }
+
+/* --- Append to existing src/style.css --- */
+
+.game-hud {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  pointer-events: auto;
+  background: rgba(10, 16, 26, 0.75);
+  border: 1px solid #1a365d;
+  box-shadow: 0 0 15px rgba(0, 195, 255, 0.15);
+  backdrop-filter: blur(6px);
+  padding: 1rem;
+  border-radius: 4px;
+  min-width: 220px;
+  font-size: 0.8rem;
+}
+
+.game-hud-header {
+  border-bottom: 1px solid #1a365d;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.game-hud-title {
+  color: #00d9ff;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.game-hud-code {
+  font-size: 1rem;
+  color: #00f0ff;
+  letter-spacing: 0.15em;
+  font-weight: bold;
+}
+
+.hud-player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.hud-player-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #e0f0ff;
+}
+
+.hud-controls-hint {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  color: #00d9ff;
+  font-size: 0.75rem;
+  pointer-events: none;
+  background: rgba(5, 7, 10, 0.7);
+  padding: 0.5rem 0.85rem;
+  border: 1px solid #1a365d;
+  border-radius: 3px;
+  line-height: 1.4;
+}

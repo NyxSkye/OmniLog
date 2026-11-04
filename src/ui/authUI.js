@@ -122,12 +122,17 @@ export const authUI = {
         </div>
 
         <div class="button-stack">
-          <button type="button" id="btn-to-lobby">Proceed to Matchmaking Chamber</button>
-          <button type="button" id="btn-simulate-sp">Test Progress: Grant +1 SP</button>
+          <button type="button" id="btn-deploy-solo">Deploy Solo (Practice Breach)</button>
+          <button type="button" id="btn-to-lobby">Multiplayer Matchmaking Chamber</button>
+          <button type="button" id="btn-simulate-sp" class="secondary">Test Progress: Grant +1 SP</button>
           <button type="button" id="btn-logout" class="secondary">Sever Uplink (Log Out)</button>
         </div>
       </div>
     `;
+
+    document.getElementById('btn-deploy-solo').addEventListener('click', () => {
+      this.container.dispatchEvent(new CustomEvent('start-solo-game'));
+    });
 
     document.getElementById('btn-to-lobby').addEventListener('click', () => {
       this.container.dispatchEvent(new CustomEvent('nav-lobby'));

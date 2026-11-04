@@ -10,12 +10,17 @@ export class PlayerCharacter {
     this.speed = 7;
     this.sprintMultiplier = 1.6;
 
+    // Jump & Physics
+    this.velocityY = 0;
+    this.gravity = -24;
+    this.jumpForce = 9.5;
+    this.isGrounded = true;
+
     this.buildPlaceholderMesh();
     this.scene.add(this.group);
   }
 
   buildPlaceholderMesh() {
-    // Body capsule
     const bodyGeo = new THREE.CapsuleGeometry(0.5, 1.0, 8, 16);
     const bodyMat = new THREE.MeshStandardMaterial({
       color: this.isLocal ? 0x00d9ff : 0xffaa00,
@@ -27,7 +32,6 @@ export class PlayerCharacter {
     body.castShadow = true;
     this.group.add(body);
 
-    // Visor indicating look direction
     const visorGeo = new THREE.BoxGeometry(0.4, 0.15, 0.3);
     const visorMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const visor = new THREE.Mesh(visorGeo, visorMat);
@@ -38,6 +42,7 @@ export class PlayerCharacter {
   update(deltaTime, keys, cameraYaw) {
     if (!this.isLocal) return;
 
+    // --- 1. Horizontal Movement (WASD) ---
     let moveX = 0;
     let moveZ = 0;
 
@@ -47,12 +52,10 @@ export class PlayerCharacter {
     if (keys.right) moveX += 1;
 
     if (moveX !== 0 || moveZ !== 0) {
-      // Normalize diagonal speed
       const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
       moveX /= length;
       moveZ /= length;
 
-      // Rotate movement vector relative to camera yaw
       const cos = Math.cos(cameraYaw);
       const sin = Math.sin(cameraYaw);
       const worldX = moveX * cos - moveZ * sin;
@@ -62,9 +65,24 @@ export class PlayerCharacter {
       this.group.position.x += worldX * currentSpeed;
       this.group.position.z += worldZ * currentSpeed;
 
-      // Orient avatar toward movement direction
-      const angle = Math.atan2(worldX, worldZ);
-      this.group.rotation.y = angle;
+      const targetAngle = Math.atan2(worldX, worldZ);
+      this.group.rotation.y = targetAngle;
+    }
+
+    // --- 2. Vertical Jump & Gravity ---
+    if (keys.jump && this.isGrounded) {
+      this.velocityY = this.jumpForce;
+      this.isGrounded = false;
+    }
+
+    this.velocityY += this.gravity * deltaTime;
+    this.group.position.y += this.velocityY * deltaTime;
+
+    // Floor collision baseline at y = 0
+    if (this.group.position.y <= 0) {
+      this.group.position.y = 0;
+      this.velocityY = 0;
+      this.isGrounded = true;
     }
   }
 
