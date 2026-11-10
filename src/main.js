@@ -54,7 +54,10 @@ function updateSquadHUD() {
   const room = gameState.currentRoom;
   const isMultiplayer = !isSolo && room;
   const currentUid = authState.currentUser?.uid;
-  const myColorHex = getAgentColorHex(currentUid);
+
+  // Retrieve room-selected color first, fallback to join-order/hash
+  const roomPlayer = room?.players?.[currentUid];
+  const myColorHex = roomPlayer?.color || getAgentColorHex(currentUid);
 
   let players = [];
   if (isMultiplayer) {
@@ -80,14 +83,14 @@ function updateSquadHUD() {
         ${players.map(p => {
           const isSelf = p.uid === currentUid;
           const hp = isSelf && authState.player ? authState.player.stats.currentHealth : (p.hp || 100);
-          const hunger = isSelf && authState.player ? authState.player.stats.currentHunger : (p.hunger || 100);
+          const hunger = isSelf && authState.player ? (authState.player.stats.currentHunger ?? 100) : (p.hunger ?? 100);
           const colorHex = isSelf ? myColorHex : (p.color || getAgentColorHex(p.uid));
 
           return `
             <div style="padding: 0.35rem 0.5rem; background: ${isSelf ? 'rgba(0,217,255,0.08)' : 'transparent'}; border-left: 3px solid ${colorHex}; margin-bottom: 0.4rem;">
               <div class="hud-player-item">
                 <span style="display: flex; align-items: center; gap: 0.4rem;">
-                  <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${colorHex};"></span>
+                  <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${colorHex}; box-shadow: 0 0 6px ${colorHex};"></span>
                   <strong>${p.displayName}</strong>
                   ${isSelf ? '<span class="you-badge">YOU</span>' : ''}
                 </span>
@@ -97,9 +100,9 @@ function updateSquadHUD() {
 
               <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:#718096; margin-top:0.25rem;">
                 <span>VITALITY / HUNGER</span>
-                <span style="color:#e67e22;">${hunger}%</span>
+                <span style="color:#e67e22;">${isNaN(hunger) ? 100 : hunger}%</span>
               </div>
-              <div class="hunger-bar-track"><div class="hunger-bar-fill" style="width: ${(hunger / 100) * 100}%;"></div></div>
+              <div class="hunger-bar-track"><div class="hunger-bar-fill" style="width: ${(isNaN(hunger) ? 100 : hunger)}%;"></div></div>
             </div>
           `;
         }).join('')}
@@ -110,7 +113,7 @@ function updateSquadHUD() {
 
 function mountGameShell() {
   uiRoot.innerHTML = `
-    <!-- Dedicated Top-Right HUD Container -->
+    <!-- Top-Right HUD Container -->
     <div id="squad-hud-container"></div>
 
     <!-- Proximity Prompt -->
@@ -190,7 +193,9 @@ function init3DWorld() {
     message: 'To seal the fracture, evacuate through the violet rift immediately without verifying spatial anchor integrity.'
   });
 
-  const myColorHex = getAgentColorHex(authState.currentUser.uid);
+  // Pull chosen color from the active lobby room, fallback if solo
+  const roomPlayer = gameState.currentRoom?.players?.[authState.currentUser?.uid];
+  const myColorHex = roomPlayer?.color || getAgentColorHex(authState.currentUser?.uid);
 
   sceneManager = new SceneManager(canvas);
   cameraManager = new CameraManager();
@@ -219,9 +224,9 @@ function init3DWorld() {
     );
   }
 
-  // Handle M [Inventory], Tab [Memory Log], E [Interact]
+  // Keybindings: M [Inventory], Tab [Memory Log], E [Interact]
   window.addEventListener('keydown', (e) => {
-    // Prevent game key activation while typing into chat
+    // Prevent actions while typing into chat
     if (document.activeElement && document.activeElement.tagName === 'INPUT') {
       return;
     }
@@ -247,7 +252,7 @@ function init3DWorld() {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
-    // Zero out movement inputs if currently typing in chat
+    // Movement lock while typing in chat
     const isTyping = document.activeElement && document.activeElement.tagName === 'INPUT';
     const activeKeys = isTyping ? {
       forward: false,
@@ -280,7 +285,7 @@ function init3DWorld() {
     if (hungerTicker >= 12) {
       hungerTicker = 0;
       if (authState.player) {
-        authState.player.stats.currentHunger = Math.max(0, authState.player.stats.currentHunger - 1);
+        authState.player.stats.currentHunger = Math.max(0, (authState.player.stats.currentHunger ?? 100) - 1);
         if (authState.player.stats.currentHunger === 0) {
           authState.player.stats.currentHealth = Math.max(1, authState.player.stats.currentHealth - 2);
           localPlayer.setHp(authState.player.stats.currentHealth);

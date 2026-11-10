@@ -5,16 +5,15 @@ import { GameSession } from '../models/GameSession.js';
 const CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const ROOM_EXPIRY_MS = 5 * 60 * 1000;
 
-// High-contrast cybernetic palette shared across 3D meshes and DOM badges
 export const AGENT_PALETTE = [
-  '#00f0ff', // Cyan
-  '#ff0055', // Neon Crimson
-  '#00ff66', // Matrix Green
-  '#ffaa00', // Amber
-  '#b026ff', // Neon Purple
-  '#ffea00', // Electric Yellow
-  '#00a8ff', // Azure Blue
-  '#ff7675'  // Coral
+  '#00f0ff', // 0: Cyan
+  '#ff0055', // 1: Neon Crimson / Pink
+  '#00ff66', // 2: Matrix Green
+  '#ffaa00', // 3: Amber / Orange
+  '#b026ff', // 4: Neon Purple
+  '#ffea00', // 5: Electric Yellow
+  '#00a8ff', // 6: Azure Blue
+  '#ff7675'  // 7: Coral
 ];
 
 export function getAgentColorHex(uid) {
@@ -54,10 +53,10 @@ export const roomService = {
     }
 
     const roomRef = ref(rtdb, `rooms/${roomCode}`);
-    const colorHex = getAgentColorHex(hostUser.uid);
+    const defaultColor = AGENT_PALETTE[0]; // Host gets slot 0 (Cyan) by default
     const session = new GameSession(roomCode, hostUser.uid, hostUser.displayName || 'Agent Host');
-    
-    session.players[hostUser.uid].color = colorHex;
+
+    session.players[hostUser.uid].color = defaultColor;
     session.players[hostUser.uid].online = true;
     session.players[hostUser.uid].hp = 100;
     session.players[hostUser.uid].maxHp = 100;
@@ -106,21 +105,24 @@ export const roomService = {
     }
 
     if (roomData.status !== 'LOBBY') {
-      throw new Error('Mission already in progress. Only existing members can rejoin.');
+      throw new Error('Mission already in progress. Only existing squad members can rejoin.');
     }
 
-    const currentCount = Object.keys(roomData.players || {}).length;
-    if (currentCount >= (roomData.maxPlayers || 8)) {
+    const currentPlayers = Object.values(roomData.players || {});
+    if (currentPlayers.length >= (roomData.maxPlayers || 8)) {
       throw new Error('Chamber is at maximum capacity (8 players).');
     }
 
-    const colorHex = getAgentColorHex(user.uid);
+    // Default color assigned strictly by join order
+    const nextSlotIndex = currentPlayers.length % AGENT_PALETTE.length;
+    const assignedColor = AGENT_PALETTE[nextSlotIndex];
+
     const playerRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}`);
     await set(playerRef, {
       uid: user.uid,
       displayName: user.displayName || 'Agent Guest',
       isReady: false,
-      color: colorHex,
+      color: assignedColor,
       hp: 100,
       maxHp: 100,
       online: true,
@@ -133,6 +135,12 @@ export const roomService = {
     onDisconnect(onlineRef).set(false);
 
     return roomData;
+  },
+
+  // Update chosen color live in the lobby
+  async updatePlayerColor(roomCode, uid, newColorHex) {
+    const colorRef = ref(rtdb, `rooms/${roomCode}/players/${uid}/color`);
+    await set(colorRef, newColorHex);
   },
 
   subscribeToRoom(roomCode, callback) {

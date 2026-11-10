@@ -1,4 +1,4 @@
-import { roomService } from '../services/roomService.js';
+import { roomService, AGENT_PALETTE } from '../services/roomService.js';
 import { gameState } from '../state/gameState.js';
 import { authState } from '../state/authState.js';
 
@@ -27,7 +27,7 @@ export const lobbyUI = {
     this.container.innerHTML = `
       <div class="panel">
         <h1 class="title">Matchmaking Uplink</h1>
-        <p class="subtitle">Join or Deploy a Dimensional Squad (2–8 Players)</p>
+        <p class="subtitle">Join or Deploy a Squad (2–8 Players)</p>
 
         <div class="form-group">
           <button type="button" id="btn-create-room">Create New Room</button>
@@ -113,7 +113,6 @@ export const lobbyUI = {
     const currentUid = authState.currentUser?.uid;
     const playersMap = room.players || {};
 
-    // Sort players: Current user pinned to index 0 (top)
     const sortedPlayers = Object.values(playersMap).sort((a, b) => {
       if (a.uid === currentUid) return -1;
       if (b.uid === currentUid) return 1;
@@ -122,20 +121,42 @@ export const lobbyUI = {
 
     const isCreator = room.hostUid === currentUid;
     const me = playersMap[currentUid];
-    // Creator is always ready; others must click Confirm Ready
+    const myColor = me?.color || AGENT_PALETTE[0];
+
     const allGuestsReady = sortedPlayers.filter(p => p.uid !== room.hostUid).every(p => p.isReady);
     const canLaunch = isCreator && sortedPlayers.length >= 2 && allGuestsReady;
 
+    // List of colors currently taken by other players
+    const takenColors = new Set(
+      sortedPlayers.filter(p => p.uid !== currentUid).map(p => p.color)
+    );
+
+    // Color picker HTML
+    const swatchesHtml = AGENT_PALETTE.map(c => {
+      const isSelected = c === myColor;
+      const isTaken = takenColors.has(c);
+
+      return `
+        <button 
+          type="button" 
+          class="color-swatch-btn ${isSelected ? 'active-swatch' : ''} ${isTaken ? 'taken-swatch' : ''}" 
+          data-color="${c}"
+          style="background: ${c};"
+          title="${isTaken ? 'Taken by teammate' : 'Select color'}"
+        ></button>
+      `;
+    }).join('');
+
     const playerListHtml = sortedPlayers.map(p => {
       const isSelf = p.uid === currentUid;
-      const dotColor = (p.color || 0x00d9ff).toString(16).padStart(6, '0');
+      const dotColor = p.color || AGENT_PALETTE[0];
       const isPlayerReady = p.uid === room.hostUid || p.isReady;
 
       return `
         <div class="status-item ${isSelf ? 'player-item-self' : ''}" style="margin-bottom: 0.5rem; padding: 0.65rem;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#${dotColor};"></span>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:${dotColor}; box-shadow: 0 0 8px ${dotColor};"></span>
               <strong>${p.displayName}</strong>
               ${isSelf ? '<span class="you-badge">YOU</span>' : ''}
             </div>
@@ -156,9 +177,17 @@ export const lobbyUI = {
           <div style="font-size: 0.7rem; color: #718096; margin-top: 0.25rem;">Share with allies (Expires after 5 min empty)</div>
         </div>
 
+        <!-- Color Selector Swatches -->
+        <div style="margin-bottom: 1rem;">
+          <label style="margin-bottom: 0.4rem;">Designate Visual Signifier (Your Color)</label>
+          <div style="display: flex; gap: 0.5rem; justify-content: center; background: #0d1522; padding: 0.6rem; border: 1px solid #1a365d; border-radius: 4px;">
+            ${swatchesHtml}
+          </div>
+        </div>
+
         <div style="margin-bottom: 1rem;">
           <label>Squad Manifest (${sortedPlayers.length} / 8)</label>
-          <div style="max-height: 220px; overflow-y: auto; margin-top: 0.5rem;">
+          <div style="max-height: 200px; overflow-y: auto; margin-top: 0.5rem;">
             ${playerListHtml}
           </div>
         </div>
@@ -177,6 +206,14 @@ export const lobbyUI = {
         </div>
       </div>
     `;
+
+    // Bind color swatch clicks
+    this.container.querySelectorAll('.color-swatch-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const chosenColor = btn.dataset.color;
+        await roomService.updatePlayerColor(code, currentUid, chosenColor);
+      });
+    });
 
     if (!isCreator) {
       document.getElementById('btn-toggle-ready').addEventListener('click', async () => {

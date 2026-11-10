@@ -458,3 +458,29 @@ button.secondary:hover {
   background: rgba(13, 21, 34, 0.95);
   border-color: #00d9ff;
 }
+
+/* Color Selector Swatch Buttons */
+.color-swatch-btn {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+  border: 2px solid transparent !important;
+  padding: 0 !important;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.color-swatch-btn:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch-btn.active-swatch {
+  border-color: #ffffff !important;
+  transform: scale(1.25);
+  box-shadow: 0 0 10px #ffffff;
+}
+
+.color-swatch-btn.taken-swatch {
+  opacity: 0.35;
+  filter: grayscale(40%);
+}
