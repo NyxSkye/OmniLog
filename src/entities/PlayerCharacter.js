@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 
 export class PlayerCharacter {
-  constructor(scene, isLocal = true, displayName = 'Agent', color = 0x00d9ff, initialHp = 100, maxHp = 100) {
+  constructor(scene, isLocal = true, displayName = 'Agent', colorHex = '#00f0ff', initialHp = 100, maxHp = 100) {
     this.scene = scene;
     this.isLocal = isLocal;
     this.displayName = displayName;
-    this.color = color;
+    this.colorHex = colorHex;
+    this.colorNum = parseInt(colorHex.replace('#', ''), 16);
     this.hp = initialHp;
     this.maxHp = maxHp;
 
@@ -29,25 +30,28 @@ export class PlayerCharacter {
   }
 
   buildMesh() {
+    // Body capsule with emissive glow so the color matches the HUD precisely under any light
     const bodyGeo = new THREE.CapsuleGeometry(0.5, 1.0, 8, 16);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: this.color,
-      roughness: 0.35,
-      metalness: 0.6
+      color: this.colorNum,
+      emissive: this.colorNum,
+      emissiveIntensity: 0.35,
+      roughness: 0.2,
+      metalness: 0.1
     });
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 1.0;
     body.castShadow = true;
     this.group.add(body);
 
-    const visorGeo = new THREE.BoxGeometry(0.4, 0.15, 0.3);
+    // Visor
+    const visorGeo = new THREE.BoxGeometry(0.42, 0.16, 0.32);
     const visorMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const visor = new THREE.Mesh(visorGeo, visorMat);
     visor.position.set(0, 1.4, 0.4);
     this.group.add(visor);
   }
 
-  // Dynamic 2D Canvas Billboard above player head
   buildNameplate() {
     this.canvas = document.createElement('canvas');
     this.canvas.width = 256;
@@ -64,7 +68,7 @@ export class PlayerCharacter {
     });
 
     this.nameplateSprite = new THREE.Sprite(spriteMat);
-    this.nameplateSprite.position.set(0, 2.35, 0); // Position above the helmet
+    this.nameplateSprite.position.set(0, 2.35, 0);
     this.nameplateSprite.scale.set(1.8, 0.68, 1);
     this.group.add(this.nameplateSprite);
 
@@ -76,21 +80,21 @@ export class PlayerCharacter {
     const { ctx, canvas } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Semi-transparent dark backing
-    ctx.fillStyle = 'rgba(5, 7, 10, 0.75)';
+    // Dark backing
+    ctx.fillStyle = 'rgba(5, 7, 10, 0.85)';
     ctx.roundRect(10, 6, 236, 84, 8);
     ctx.fill();
 
-    // Callout border
-    ctx.strokeStyle = this.isLocal ? '#00d9ff' : 'rgba(26, 54, 93, 0.8)';
-    ctx.lineWidth = 2;
+    // Border using exact agent color
+    ctx.strokeStyle = this.colorHex;
+    ctx.lineWidth = 3;
     ctx.roundRect(10, 6, 236, 84, 8);
     ctx.stroke();
 
-    // Player Name
+    // Name text
     ctx.font = 'bold 22px Consolas, monospace';
     ctx.textAlign = 'center';
-    ctx.fillStyle = this.isLocal ? '#00ffff' : '#e0f0ff';
+    ctx.fillStyle = '#ffffff';
     const label = this.isLocal ? `${this.displayName} (YOU)` : this.displayName;
     ctx.fillText(label, 128, 34);
 
@@ -108,7 +112,7 @@ export class PlayerCharacter {
     ctx.fillStyle = pct > 0.5 ? '#48bb78' : pct > 0.25 ? '#ecc94b' : '#f56565';
     ctx.fillRect(barX, barY, barW * pct, barH);
 
-    // HP Text
+    // HP text
     ctx.font = 'bold 12px Consolas, monospace';
     ctx.fillStyle = '#ffffff';
     ctx.fillText(`${this.hp}/${this.maxHp} HP`, 128, 74);

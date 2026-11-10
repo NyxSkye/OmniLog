@@ -3,16 +3,16 @@ import { rtdb } from '../config/firebase.js';
 import { PlayerCharacter } from '../entities/PlayerCharacter.js';
 
 export class NetworkSync {
-  constructor(roomCode, localUid, localPlayer, scene, playerColor) {
+  constructor(roomCode, localUid, localPlayer, scene, colorHex) {
     this.roomCode = roomCode;
     this.localUid = localUid;
     this.localPlayer = localPlayer;
     this.scene = scene;
-    this.playerColor = playerColor;
+    this.colorHex = colorHex;
 
-    this.remotePlayers = new Map(); // uid -> PlayerCharacter
+    this.remotePlayers = new Map();
     this.lastBroadcastTime = 0;
-    this.broadcastRate = 50; // 20 Hz
+    this.broadcastRate = 50;
     this.unsubscribe = null;
 
     this.initSync();
@@ -22,7 +22,6 @@ export class NetworkSync {
     const myTransformRef = ref(rtdb, `rooms/${this.roomCode}/transforms/${this.localUid}`);
     onDisconnect(myTransformRef).remove();
 
-    // Broadcast spawn position instantly so players are visible immediately without moving
     this.broadcastTransform();
 
     const transformsRef = ref(rtdb, `rooms/${this.roomCode}/transforms`);
@@ -42,7 +41,7 @@ export class NetworkSync {
       y: Number(pos.y.toFixed(2)),
       z: Number(pos.z.toFixed(2)),
       rotY: Number(rotY.toFixed(3)),
-      color: this.playerColor,
+      color: this.colorHex,
       displayName: this.localPlayer.displayName,
       hp: this.localPlayer.hp,
       maxHp: this.localPlayer.maxHp,
@@ -57,14 +56,13 @@ export class NetworkSync {
       if (uid === this.localUid) continue;
 
       if (!this.remotePlayers.has(uid)) {
-        // Instantiate remote player using their exact transmitted color
         const remoteAgent = new PlayerCharacter(
           this.scene,
           false,
           data.displayName || 'Ally',
-          data.color || 0xff9900,
-          data.hp ?? 100,
-          data.maxHp ?? 100
+          data.color || '#ff9900',
+          data.hp || 100,
+          data.maxHp || 100
         );
         remoteAgent.group.position.set(data.x, data.y, data.z);
         remoteAgent.group.rotation.y = data.rotY;
@@ -73,10 +71,6 @@ export class NetworkSync {
       } else {
         const remoteAgent = this.remotePlayers.get(uid);
         remoteAgent.setNetworkTransform(data.x, data.y, data.z, data.rotY);
-        if (data.maxHp !== undefined && remoteAgent.maxHp !== data.maxHp) {
-          remoteAgent.maxHp = data.maxHp;
-          remoteAgent.redrawNameplate();
-        }
         if (data.hp !== undefined && remoteAgent.hp !== data.hp) {
           remoteAgent.setHp(data.hp);
         }

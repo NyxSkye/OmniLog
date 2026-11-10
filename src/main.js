@@ -7,7 +7,7 @@ import { lobbyUI } from './ui/lobbyUI.js';
 import { inventoryUI } from './ui/inventoryUI.js';
 import { memoryLogUI } from './ui/memoryLogUI.js';
 import { chatUI } from './ui/chatUI.js';
-import { roomService, getAgentColor } from './services/roomService.js';
+import { roomService, getAgentColorHex } from './services/roomService.js';
 
 import { SceneManager } from './engine/sceneManager.js';
 import { CameraManager } from './engine/cameraManager.js';
@@ -47,10 +47,6 @@ function showToast(msg) {
   }, 2500);
 }
 
-function formatColorHex(colorNum) {
-  return '#' + (colorNum || 0x00d9ff).toString(16).padStart(6, '0');
-}
-
 function updateSquadHUD() {
   const hudContainer = document.getElementById('squad-hud-container');
   if (!hudContainer) return;
@@ -58,7 +54,7 @@ function updateSquadHUD() {
   const room = gameState.currentRoom;
   const isMultiplayer = !isSolo && room;
   const currentUid = authState.currentUser?.uid;
-  const myColorNum = getAgentColor(currentUid || 'default');
+  const myColorHex = getAgentColorHex(currentUid);
 
   let players = [];
   if (isMultiplayer) {
@@ -68,7 +64,7 @@ function updateSquadHUD() {
     players = [{
       uid: currentUid,
       displayName: authState.currentUser?.displayName || 'Agent Solo',
-      color: myColorNum,
+      color: myColorHex,
       hp: authState.player?.stats.currentHealth || 100,
       hunger: authState.player?.stats.currentHunger || 100
     }];
@@ -85,7 +81,7 @@ function updateSquadHUD() {
           const isSelf = p.uid === currentUid;
           const hp = isSelf && authState.player ? authState.player.stats.currentHealth : (p.hp || 100);
           const hunger = isSelf && authState.player ? authState.player.stats.currentHunger : (p.hunger || 100);
-          const colorHex = formatColorHex(isSelf ? myColorNum : (p.color || myColorNum));
+          const colorHex = isSelf ? myColorHex : (p.color || getAgentColorHex(p.uid));
 
           return `
             <div style="padding: 0.35rem 0.5rem; background: ${isSelf ? 'rgba(0,217,255,0.08)' : 'transparent'}; border-left: 3px solid ${colorHex}; margin-bottom: 0.4rem;">
@@ -114,7 +110,7 @@ function updateSquadHUD() {
 
 function mountGameShell() {
   uiRoot.innerHTML = `
-    <!-- Top-Right HUD Container -->
+    <!-- Dedicated Top-Right HUD Container -->
     <div id="squad-hud-container"></div>
 
     <!-- Proximity Prompt -->
@@ -194,7 +190,7 @@ function init3DWorld() {
     message: 'To seal the fracture, evacuate through the violet rift immediately without verifying spatial anchor integrity.'
   });
 
-  const myColor = getAgentColor(authState.currentUser.uid);
+  const myColorHex = getAgentColorHex(authState.currentUser.uid);
 
   sceneManager = new SceneManager(canvas);
   cameraManager = new CameraManager();
@@ -202,7 +198,7 @@ function init3DWorld() {
     sceneManager.scene,
     true,
     authState.currentUser?.displayName,
-    myColor,
+    myColorHex,
     authState.player?.stats.currentHealth || 100,
     100
   );
@@ -219,13 +215,13 @@ function init3DWorld() {
       authState.currentUser.uid,
       localPlayer,
       sceneManager.scene,
-      myColor
+      myColorHex
     );
   }
 
   // Handle M [Inventory], Tab [Memory Log], E [Interact]
   window.addEventListener('keydown', (e) => {
-    // Prevent game keys while typing in input
+    // Prevent game key activation while typing into chat
     if (document.activeElement && document.activeElement.tagName === 'INPUT') {
       return;
     }
@@ -251,7 +247,7 @@ function init3DWorld() {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
-    // Movement lock while typing in input
+    // Zero out movement inputs if currently typing in chat
     const isTyping = document.activeElement && document.activeElement.tagName === 'INPUT';
     const activeKeys = isTyping ? {
       forward: false,
