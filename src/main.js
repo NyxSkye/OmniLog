@@ -4,6 +4,9 @@ import { authState } from './state/authState.js';
 import { gameState } from './state/gameState.js';
 import { authUI } from './ui/authUI.js';
 import { lobbyUI } from './ui/lobbyUI.js';
+import { inventoryUI } from './ui/inventoryUI.js';
+import { memoryLogUI } from './ui/memoryLogUI.js';
+import { chatUI } from './ui/chatUI.js';
 import { roomService, getAgentColor } from './services/roomService.js';
 
 import { SceneManager } from './engine/sceneManager.js';
@@ -11,6 +14,9 @@ import { CameraManager } from './engine/cameraManager.js';
 import { InputManager } from './engine/inputManager.js';
 import { NetworkSync } from './engine/networkSync.js';
 import { PlayerCharacter } from './entities/PlayerCharacter.js';
+import { AnomalyNode } from './entities/AnomalyNode.js';
+import { MemoryLog } from './models/MemoryLog.js';
+import * as THREE from 'three';
 
 const uiRoot = document.getElementById('ui-root');
 const canvas = document.getElementById('game-canvas');
@@ -23,31 +29,53 @@ let networkSync = null;
 let isGameRunning = false;
 let isSolo = false;
 
-function renderInGameHUD() {
+let anomalies = [];
+let memoryLog = null;
+let hungerTicker = 0;
+
+function showToast(msg) {
+  let toast = document.getElementById('pickup-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'pickup-toast';
+    document.body.appendChild(toast);
+  }
+  toast.innerText = msg;
+  toast.style.opacity = '1';
+  setTimeout(() => {
+    toast.style.opacity = '0';
+  }, 2500);
+}
+
+function formatColorHex(colorNum) {
+  return '#' + (colorNum || 0x00d9ff).toString(16).padStart(6, '0');
+}
+
+// Updates only the top-right HUD container without destroying open modals or chat
+function updateSquadHUD() {
+  const hudContainer = document.getElementById('squad-hud-container');
+  if (!hudContainer) return;
+
   const room = gameState.currentRoom;
   const isMultiplayer = !isSolo && room;
   const currentUid = authState.currentUser?.uid;
+  const myColor = getAgentColor(currentUid || 'default');
 
   let players = [];
   if (isMultiplayer) {
     const rawList = Object.values(room.players || {});
-    // Pin local player to index 0
-    players = rawList.sort((a, b) => {
-      if (a.uid === currentUid) return -1;
-      if (b.uid === currentUid) return 1;
-      return 0;
-    });
+    players = rawList.sort((a, b) => (a.uid === currentUid ? -1 : b.uid === currentUid ? 1 : 0));
   } else {
     players = [{
       uid: currentUid,
       displayName: authState.currentUser?.displayName || 'Agent Solo',
-      hp: 100,
-      maxHp: 100
+      color: myColor,
+      hp: authState.player?.stats.currentHealth || 100,
+      hunger: authState.player?.stats.currentHunger || 100
     }];
   }
 
-  uiRoot.innerHTML = `
-    <!-- Top-Right Docked Squad HUD (HP Active, No Host Info) -->
+  hudContainer.innerHTML = `
     <div class="game-hud">
       <div class="game-hud-header">
         <span class="game-hud-title">${isMultiplayer ? 'Squad Chamber' : 'Solo Sector'}</span>
@@ -56,45 +84,116 @@ function renderInGameHUD() {
       <div class="hud-player-list">
         ${players.map(p => {
           const isSelf = p.uid === currentUid;
-          const hp = p.hp || 100;
-          const maxHp = p.maxHp || 100;
-          const hpPercent = (hp / maxHp) * 100;
-          const dotColor = (p.color || 0x00d9ff).toString(16).padStart(6, '0');
+          const hp = isSelf && authState.player ? authState.player.stats.currentHealth : (p.hp || 100);
+          const hunger = isSelf && authState.player ? authState.player.stats.currentHunger : (p.hunger || 100);
+          const colorHex = formatColorHex(isSelf ? myColor : (p.color || myColor));
 
           return `
-            <div style="padding: 0.35rem 0.5rem; background: ${isSelf ? 'rgba(0,217,255,0.08)' : 'transparent'}; border-left: 2px solid #${dotColor}; margin-bottom: 0.3rem;">
+            <div style="padding: 0.35rem 0.5rem; background: ${isSelf ? 'rgba(0,217,255,0.08)' : 'transparent'}; border-left: 3px solid ${colorHex}; margin-bottom: 0.4rem;">
               <div class="hud-player-item">
                 <span style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${colorHex};"></span>
                   <strong>${p.displayName}</strong>
                   ${isSelf ? '<span class="you-badge">YOU</span>' : ''}
                 </span>
-                <span style="color: #48bb78; font-size: 0.7rem; font-weight: bold;">${hp}/${maxHp}</span>
+                <span style="color: #48bb78; font-size: 0.7rem; font-weight: bold;">${hp} HP</span>
               </div>
-              <div class="hp-bar-track">
-                <div class="hp-bar-fill" style="width: ${hpPercent}%;"></div>
+              <div class="hp-bar-track"><div class="hp-bar-fill" style="width: ${(hp / 100) * 100}%;"></div></div>
+
+              <div style="display:flex; justify-content:space-between; font-size:0.6rem; color:#718096; margin-top:0.25rem;">
+                <span>VITALITY / HUNGER</span>
+                <span style="color:#e67e22;">${hunger}%</span>
               </div>
+              <div class="hunger-bar-track"><div class="hunger-bar-fill" style="width: ${(hunger / 100) * 100}%;"></div></div>
             </div>
           `;
         }).join('')}
       </div>
     </div>
+  `;
+}
+
+function mountGameShell() {
+  uiRoot.innerHTML = `
+    <!-- Top-Right HUD Container -->
+    <div id="squad-hud-container"></div>
+
+    <!-- Proximity Prompt -->
+    <div id="interact-prompt" style="display:none; position:absolute; top:65%; left:50%; transform:translate(-50%,-50%); color:#00f0ff; background:rgba(10,16,26,0.9); border:1px solid #00d9ff; padding:0.6rem 1.2rem; font-family:monospace; font-size:0.9rem; pointer-events:none; border-radius:3px;">
+      [E] RUMMAGE & INSPECT ANOMALY
+    </div>
 
     <!-- Controls Overlay -->
     <div class="hud-controls-hint">
       <strong>CONTROLS:</strong><br>
-      • WASD or ARROWS: Move / Strafe<br>
-      • MOUSE: Free Orbit Camera<br>
-      • SPACE: Jump<br>
-      • SHIFT: Sprint
+      • WASD: Move | MOUSE: Orbit Camera | SPACE: Jump<br>
+      • [E]: Inspect / Scavenge Anomaly<br>
+      • [M]: Grid Storage & Equip<br>
+      • [TAB]: Memory Log (Clues & Directives)<br>
+      • [ENTER]: Squad Comms Chat
     </div>
   `;
+
+  updateSquadHUD();
+  chatUI.init(uiRoot);
+}
+
+function spawnTestAnomalies() {
+  anomalies = [
+    new AnomalyNode(
+      sceneManager.scene,
+      'node-1',
+      new THREE.Vector3(5, 0, 5),
+      {
+        name: 'Ration Pack (High-Calorie)',
+        type: 'FOOD',
+        nutrition: 35,
+        systemDescription: 'Standard-issue compressed field ration. Safe to digest and relieves hunger.'
+      }
+    ),
+    new AnomalyNode(
+      sceneManager.scene,
+      'node-2',
+      new THREE.Vector3(-6, 0, 6),
+      {
+        name: 'Expedition Tactical Rig',
+        type: 'BACKPACK',
+        extraSlots: 6,
+        systemDescription: 'Lightweight tactical harness with modular pouches. Expands inventory grid by 6 slots.'
+      }
+    ),
+    new AnomalyNode(
+      sceneManager.scene,
+      'node-3',
+      new THREE.Vector3(0, 0, -8),
+      {
+        name: 'Dimensional Prowler Membrane',
+        type: 'RESEARCH',
+        researchData: 'Contains latent electromagnetic frequencies from Sector 4 breach.',
+        systemDescription: 'Non-consumable organic residue. Can be analyzed for research by qualified personnel.'
+      },
+      {
+        id: 'clue-breach-origin',
+        title: 'Artificial Fracture Resonance',
+        description: 'The anomaly tear was not naturally opened; resonance harmonics prove an interior transmitter forced the portal.'
+      }
+    )
+  ];
 }
 
 function init3DWorld() {
-  renderInGameHUD();
-
   if (isGameRunning) return;
   isGameRunning = true;
+
+  mountGameShell();
+
+  memoryLog = new MemoryLog(authState.currentUser.uid);
+  memoryLog.addDirective({
+    id: 'sys-001',
+    code: 'INIT_DIR',
+    source: 'Automated Breach Core',
+    message: 'To seal the fracture, evacuate through the violet rift immediately without verifying spatial anchor integrity.'
+  });
 
   const myColor = getAgentColor(authState.currentUser.uid);
 
@@ -105,13 +204,15 @@ function init3DWorld() {
     true,
     authState.currentUser?.displayName,
     myColor,
-    100,
+    authState.player?.stats.currentHealth || 100,
     100
   );
 
   inputManager = new InputManager(canvas, (deltaX, deltaY) => {
     cameraManager.handleMouseLook(deltaX, deltaY);
   });
+
+  spawnTestAnomalies();
 
   if (!isSolo && gameState.roomCode && authState.currentUser) {
     networkSync = new NetworkSync(
@@ -123,12 +224,63 @@ function init3DWorld() {
     );
   }
 
+  // Keybindings: M [Inventory], Tab [Memory Log], E [Interact]
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+      return;
+    }
+
+    if (e.code === 'KeyM') {
+      inventoryUI.toggle();
+    }
+    if (e.code === 'Tab') {
+      e.preventDefault();
+      memoryLogUI.toggle(memoryLog);
+    }
+    if (e.code === 'KeyE') {
+      handleProximityInteraction();
+    }
+  });
+
+  window.addEventListener('update-vitals', () => {
+    updateSquadHUD();
+  });
+
   let lastTime = performance.now();
   function gameLoop(currentTime) {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
     localPlayer.update(deltaTime, inputManager.keys, cameraManager.yaw);
+
+    const playerPos = localPlayer.getPosition();
+    let promptActive = false;
+
+    anomalies.forEach(node => {
+      node.update(deltaTime, currentTime * 0.001);
+      if (node.checkProximity(playerPos)) {
+        promptActive = true;
+      }
+    });
+
+    const promptEl = document.getElementById('interact-prompt');
+    if (promptEl) {
+      promptEl.style.display = promptActive ? 'block' : 'none';
+    }
+
+    // Hunger drain ticker
+    hungerTicker += deltaTime;
+    if (hungerTicker >= 12) {
+      hungerTicker = 0;
+      if (authState.player) {
+        authState.player.stats.currentHunger = Math.max(0, authState.player.stats.currentHunger - 1);
+        if (authState.player.stats.currentHunger === 0) {
+          authState.player.stats.currentHealth = Math.max(1, authState.player.stats.currentHealth - 2);
+          localPlayer.setHp(authState.player.stats.currentHealth);
+        }
+        updateSquadHUD();
+      }
+    }
 
     if (networkSync) {
       networkSync.update(currentTime, deltaTime);
@@ -140,6 +292,42 @@ function init3DWorld() {
     requestAnimationFrame(gameLoop);
   }
   requestAnimationFrame(gameLoop);
+}
+
+function handleProximityInteraction() {
+  const playerPos = localPlayer.getPosition();
+  const player = authState.player;
+
+  for (let i = anomalies.length - 1; i >= 0; i--) {
+    const node = anomalies[i];
+    if (node.checkProximity(playerPos)) {
+      node.markScanned();
+
+      if (node.itemData) {
+        const added = player.addItem(node.itemData);
+        if (added) {
+          memoryLog.addDailyEntry(`Scavenged: ${node.itemData.name}`);
+          showToast(`+ Acquired: ${node.itemData.name} (Press [M] to inspect)`);
+        } else {
+          showToast(`Grid Full! Cannot acquire: ${node.itemData.name}`);
+          return;
+        }
+      }
+
+      if (node.clueData) {
+        memoryLog.addClue(node.clueData);
+        player.sp += 2;
+        showToast(`+ Verified Clue Unlocked: "${node.clueData.title}" (Press [TAB])`);
+      }
+
+      databaseService.savePlayerProgress(player);
+      updateSquadHUD();
+
+      node.destroy();
+      anomalies.splice(i, 1);
+      break;
+    }
+  }
 }
 
 function switchView(view) {
@@ -164,6 +352,7 @@ gameState.subscribe((state) => {
   if (state.currentRoom && state.currentRoom.status === 'IN_PROGRESS') {
     isSolo = false;
     init3DWorld();
+    updateSquadHUD();
   }
 });
 

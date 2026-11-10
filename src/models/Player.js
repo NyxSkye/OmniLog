@@ -3,44 +3,58 @@ export class Player {
     this.uid = uid;
     this.displayName = displayName;
     this.level = 1;
-    this.sp = 0; // Skill Points
+    this.sp = 0;
 
-    // Base attributes
+    // Assigned specialization (Researcher, Weapon Master, Elementalist, Appraiser, Tamer)
+    this.role = 'Researcher';
+
+    // Vitals
     this.stats = {
       maxHealth: 100,
       currentHealth: 100,
       maxStamina: 100,
       currentStamina: 100,
-      maxMana: 0, // 0 until Arcana is unlocked
+      maxHunger: 100,
+      currentHunger: 100,
+      maxMana: 0,
       currentMana: 0
     };
 
-    // Progression trees
-    this.trees = {
-      physical: 0,
-      tactical: 0,
-      arcane: 0
+    // Equipment slots
+    this.equipped = {
+      clothes: null,
+      backpack: null, // Equipping upgrades grid capacity
+      accessory: null,
+      weapon: null
     };
 
-    // Unlocks & inventory
-    this.unlockedArcana = [];
-    this.inventory = {
-      munitions: 30,
-      medStims: 1,
-      anomalyCures: 0,
-      artifacts: []
-    };
+    // Base inventory: 6 slots without backpack
+    this.baseGridCapacity = 6;
+    this.items = []; // Array of Item objects
 
-    // Investigation progress
     this.cluesFound = [];
     this.createdAt = Date.now();
     this.lastSaved = Date.now();
   }
 
-  static fromFirestore(data) {
-    const player = new Player(data.uid, data.displayName);
-    Object.assign(player, data);
-    return player;
+  get totalInventoryCapacity() {
+    const bonus = this.equipped.backpack ? (this.equipped.backpack.extraSlots || 6) : 0;
+    return this.baseGridCapacity + bonus;
+  }
+
+  addItem(item) {
+    if (this.items.length >= this.totalInventoryCapacity) {
+      return false; // Grid full
+    }
+    this.items.push(item);
+    return true;
+  }
+
+  removeItem(index) {
+    if (index >= 0 && index < this.items.length) {
+      return this.items.splice(index, 1)[0];
+    }
+    return null;
   }
 
   toFirestore() {
@@ -49,12 +63,18 @@ export class Player {
       displayName: this.displayName,
       level: this.level,
       sp: this.sp,
+      role: this.role,
       stats: this.stats,
-      trees: this.trees,
-      unlockedArcana: this.unlockedArcana,
-      inventory: this.inventory,
+      equipped: this.equipped,
+      items: this.items,
       cluesFound: this.cluesFound,
       lastSaved: Date.now()
     };
+  }
+
+  static fromFirestore(data) {
+    const p = new Player(data.uid, data.displayName);
+    Object.assign(p, data);
+    return p;
   }
 }
