@@ -51,7 +51,6 @@ function formatColorHex(colorNum) {
   return '#' + (colorNum || 0x00d9ff).toString(16).padStart(6, '0');
 }
 
-// Updates only the top-right HUD container without destroying open modals or chat
 function updateSquadHUD() {
   const hudContainer = document.getElementById('squad-hud-container');
   if (!hudContainer) return;
@@ -59,7 +58,7 @@ function updateSquadHUD() {
   const room = gameState.currentRoom;
   const isMultiplayer = !isSolo && room;
   const currentUid = authState.currentUser?.uid;
-  const myColor = getAgentColor(currentUid || 'default');
+  const myColorNum = getAgentColor(currentUid || 'default');
 
   let players = [];
   if (isMultiplayer) {
@@ -69,7 +68,7 @@ function updateSquadHUD() {
     players = [{
       uid: currentUid,
       displayName: authState.currentUser?.displayName || 'Agent Solo',
-      color: myColor,
+      color: myColorNum,
       hp: authState.player?.stats.currentHealth || 100,
       hunger: authState.player?.stats.currentHunger || 100
     }];
@@ -86,7 +85,7 @@ function updateSquadHUD() {
           const isSelf = p.uid === currentUid;
           const hp = isSelf && authState.player ? authState.player.stats.currentHealth : (p.hp || 100);
           const hunger = isSelf && authState.player ? authState.player.stats.currentHunger : (p.hunger || 100);
-          const colorHex = formatColorHex(isSelf ? myColor : (p.color || myColor));
+          const colorHex = formatColorHex(isSelf ? myColorNum : (p.color || myColorNum));
 
           return `
             <div style="padding: 0.35rem 0.5rem; background: ${isSelf ? 'rgba(0,217,255,0.08)' : 'transparent'}; border-left: 3px solid ${colorHex}; margin-bottom: 0.4rem;">
@@ -123,7 +122,7 @@ function mountGameShell() {
       [E] RUMMAGE & INSPECT ANOMALY
     </div>
 
-    <!-- Controls Overlay -->
+    <!-- Controls Hint -->
     <div class="hud-controls-hint">
       <strong>CONTROLS:</strong><br>
       • WASD: Move | MOUSE: Orbit Camera | SPACE: Jump<br>
@@ -224,8 +223,9 @@ function init3DWorld() {
     );
   }
 
-  // Keybindings: M [Inventory], Tab [Memory Log], E [Interact]
+  // Handle M [Inventory], Tab [Memory Log], E [Interact]
   window.addEventListener('keydown', (e) => {
+    // Prevent game keys while typing in input
     if (document.activeElement && document.activeElement.tagName === 'INPUT') {
       return;
     }
@@ -251,7 +251,18 @@ function init3DWorld() {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
     lastTime = currentTime;
 
-    localPlayer.update(deltaTime, inputManager.keys, cameraManager.yaw);
+    // Movement lock while typing in input
+    const isTyping = document.activeElement && document.activeElement.tagName === 'INPUT';
+    const activeKeys = isTyping ? {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+      sprint: false,
+      jump: false
+    } : inputManager.keys;
+
+    localPlayer.update(deltaTime, activeKeys, cameraManager.yaw);
 
     const playerPos = localPlayer.getPosition();
     let promptActive = false;
