@@ -57,7 +57,7 @@ export const inventoryUI = {
             <h2 class="title" style="margin:0; text-align:left;">Grid Storage</h2>
             <span class="subtitle" style="margin:0;">CAPACITY: ${items.length} / ${capacity} | ROLE: ${player.role || 'Agent'}</span>
           </div>
-          <button type="button" id="btn-close-inv" style="width:auto; padding:0.25rem 0.75rem; background:transparent; border:1px solid #e53e3e; color:#fc8181;">✕ Close [M]</button>
+          <button type="button" id="btn-close-inv" style="width:auto; padding:0.25rem 0.75rem; background:transparent; border:1px solid #e53e3e; color:#fc8181;">✕ Close [ESC]</button>
         </div>
 
         <div class="inv-layout">

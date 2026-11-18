@@ -484,3 +484,199 @@ button.secondary:hover {
   opacity: 0.35;
   filter: grayscale(40%);
 }
+
+/* ============================================================
+   PAUSE MENU  (ESC)
+   ============================================================ */
+.pause-overlay {
+  /* Slightly heavier backdrop than regular modals */
+  background: rgba(0, 0, 0, 0.82);
+  z-index: 200;
+}
+
+.pause-panel {
+  pointer-events: auto;
+  background: rgba(5, 10, 18, 0.97);
+  border: 1px solid #00d9ff;
+  box-shadow: 0 0 40px rgba(0, 217, 255, 0.25), inset 0 0 60px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  padding: 2.5rem 2rem 2rem;
+  border-radius: 4px;
+  width: 90%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pause-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #1a365d;
+  padding-bottom: 1.25rem;
+}
+
+.pause-glitch-title {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #00f0ff;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+}
+
+.pause-subtitle {
+  font-size: 0.7rem;
+  color: #718096;
+  letter-spacing: 0.15em;
+  margin-top: 0.3rem;
+  text-transform: uppercase;
+}
+
+.pause-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pause-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: 1px solid #1e3a4a;
+  color: #c8e6f0;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pause-btn:hover {
+  background: rgba(0, 217, 255, 0.1);
+  border-color: #00d9ff;
+  color: #00f0ff;
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.2);
+  padding-left: 1.4rem;
+}
+
+.pause-btn-icon {
+  font-size: 1rem;
+  min-width: 1.2rem;
+  text-align: center;
+}
+
+/* Warning — save & quit */
+.pause-btn-warn {
+  border-color: #744210;
+  color: #f6ad55;
+  margin-top: 0.75rem;
+}
+
+.pause-btn-warn:hover {
+  background: rgba(246, 173, 85, 0.1);
+  border-color: #f6ad55;
+  color: #fbd38d;
+  box-shadow: 0 0 10px rgba(246, 173, 85, 0.2);
+}
+
+/* Danger — evict */
+.pause-btn-danger {
+  border-color: #742a2a;
+  color: #fc8181;
+}
+
+.pause-btn-danger:hover {
+  background: rgba(252, 129, 129, 0.1);
+  border-color: #fc8181;
+  color: #feb2b2;
+  box-shadow: 0 0 10px rgba(252, 129, 129, 0.2);
+}
+
+/* Back button */
+.pause-btn-back {
+  margin-top: 1.25rem;
+  border-color: #2d3748;
+  color: #718096;
+}
+
+.pause-btn-back:hover {
+  background: rgba(113, 128, 150, 0.12);
+  border-color: #a0aec0;
+  color: #e2e8f0;
+  box-shadow: none;
+  padding-left: 1.4rem;
+}
+
+.pause-footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.7rem;
+  color: #4a5568;
+  letter-spacing: 0.1em;
+}
+
+.pause-footer kbd {
+  background: #1a202c;
+  border: 1px solid #2d3748;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  color: #a0aec0;
+  font-size: 0.65rem;
+}
+
+/* ── Controls Reference ── */
+.pause-controls-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #c8e6f0;
+}
+
+.ctrl-row kbd {
+  background: #0d1522;
+  border: 1px solid #2d3748;
+  padding: 0.2rem 0.6rem;
+  border-radius: 3px;
+  color: #00f0ff;
+  font-size: 0.75rem;
+  min-width: 80px;
+  text-align: center;
+  letter-spacing: 0.05em;
+}
+
+/* ── Settings ── */
+.pause-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: #c8e6f0;
+}
+
+.settings-row label {
+  flex: 1;
+  font-size: 0.8rem;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0;
+}

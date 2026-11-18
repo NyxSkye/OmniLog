@@ -35,5 +35,32 @@ export const databaseService = {
         await update(playerRef, { cluesFound: clues, lastSaved: Date.now() });
       }
     }
+  },
+
+  /**
+   * Persist a lightweight session checkpoint so the game can resume from
+   * the same room next time the player opens the app.
+   * @param {string} uid
+   * @param {{ roomCode: string|null, savedAt: number }} checkpoint
+   */
+  async saveGameCheckpoint(uid, checkpoint) {
+    const playerRef = ref(rtdb, `players/${uid}`);
+    await update(playerRef, {
+      lastCheckpoint: checkpoint,
+      lastSaved: Date.now()
+    });
+  },
+
+  /**
+   * Load any previously saved checkpoint for the player.
+   * Returns null if none exists.
+   */
+  async loadGameCheckpoint(uid) {
+    const playerRef = ref(rtdb, `players/${uid}`);
+    const snap = await get(playerRef);
+    if (snap.exists()) {
+      return snap.val().lastCheckpoint || null;
+    }
+    return null;
   }
 };

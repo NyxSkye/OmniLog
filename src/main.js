@@ -7,6 +7,7 @@ import { lobbyUI } from './ui/lobbyUI.js';
 import { inventoryUI } from './ui/inventoryUI.js';
 import { memoryLogUI } from './ui/memoryLogUI.js';
 import { chatUI } from './ui/chatUI.js';
+import { pauseMenuUI } from './ui/pauseMenuUI.js';
 import { roomService, getAgentColorHex } from './services/roomService.js';
 
 import { SceneManager } from './engine/sceneManager.js';
@@ -126,9 +127,10 @@ function mountGameShell() {
       <strong>CONTROLS:</strong><br>
       • WASD: Move | MOUSE: Orbit Camera | SPACE: Jump<br>
       • [E]: Inspect / Scavenge Anomaly<br>
-      • [M]: Grid Storage & Equip<br>
-      • [TAB]: Memory Log (Clues & Directives)<br>
-      • [ENTER]: Squad Comms Chat
+      • [M]: Grid Storage &amp; Equip<br>
+      • [TAB]: Memory Log (Clues &amp; Directives)<br>
+      • [ENTER]: Squad Comms Chat<br>
+      • [ESC]: Pause Menu
     </div>
   `;
 
@@ -224,13 +226,39 @@ function init3DWorld() {
     );
   }
 
-  // Keybindings: M [Inventory], Tab [Memory Log], E [Interact]
+  // Wire up the pause menu
+  pauseMenuUI.init(memoryLog, async (action) => {
+    // action is 'quit' or 'evict'
+    await teardownGame();
+    if (action === 'evict') {
+      // Clear local room state but DON'T call leaveRoom — record stays
+      gameState.clearRoom();
+    } else {
+      // Save & quit — same: keep record, just go back to lobby/auth
+      gameState.clearRoom();
+    }
+    switchView(authState.currentUser ? 'lobby' : 'auth');
+  });
+
+  // Keybindings: M [Inventory], Tab [Memory Log], E [Interact], ESC [Pause]
   window.addEventListener('keydown', (e) => {
     // Prevent actions while typing into chat
     if (document.activeElement && document.activeElement.tagName === 'INPUT') {
       return;
     }
 
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      // ESC = one step back through the stack:
+      // sub-panel → pause main → close pause (resume) ← inventory ← memory log
+      if (pauseMenuUI.isOpen) {
+        pauseMenuUI.handleEsc();
+        return;
+      }
+      if (inventoryUI.isOpen) { inventoryUI.toggle(); return; }
+      if (memoryLogUI.isOpen) { memoryLogUI.toggle(memoryLog); return; }
+      pauseMenuUI.toggle();
+    }
     if (e.code === 'KeyM') {
       inventoryUI.toggle();
     }
@@ -342,8 +370,42 @@ function handleProximityInteraction() {
   }
 }
 
+/**
+ * Tear down the 3D world and reset all runtime state so the player can
+ * return to the lobby without a page reload.
+ */
+function teardownGame() {
+  isGameRunning = false;
+  isSolo = false;
+
+  // Stop network sync
+  if (networkSync) {
+    networkSync.destroy();
+    networkSync = null;
+  }
+
+  // Release pointer lock
+  if (document.pointerLockElement) {
+    document.exitPointerLock();
+  }
+
+  // Dispose Three.js resources
+  if (sceneManager) {
+    sceneManager.dispose?.();
+    sceneManager = null;
+  }
+  cameraManager = null;
+  inputManager = null;
+  localPlayer = null;
+  anomalies = [];
+  memoryLog = null;
+  hungerTicker = 0;
+
+  // Mark not in game so switchView works
+  gameState.setInGame(false);
+}
+
 function switchView(view) {
-  if (gameState.isInGame) return;
   if (view === 'auth') {
     authUI.init(uiRoot);
   } else if (view === 'lobby') {

@@ -58,7 +58,12 @@ export const lobbyUI = {
     document.getElementById('btn-create-room').addEventListener('click', async () => {
       this.errorMessage = '';
       try {
+        const uid = authState.currentUser?.uid;
+        // One-room rule: evict from any previous room before creating a new one
+        if (uid) await roomService.ensureSingleRoom(uid);
         const code = await roomService.createRoom(authState.currentUser);
+        // Track active room on player profile
+        if (uid) await roomService.setActiveRoom(uid, code);
         this.listenToRoom(code);
       } catch (err) {
         this.errorMessage = err.message;
@@ -78,7 +83,12 @@ export const lobbyUI = {
       }
 
       try {
+        const uid = authState.currentUser?.uid;
+        // One-room rule: evict from any previous room before joining a new one
+        if (uid) await roomService.ensureSingleRoom(uid);
         await roomService.joinRoom(code, authState.currentUser);
+        // Track active room on player profile
+        if (uid) await roomService.setActiveRoom(uid, code);
         this.listenToRoom(code);
       } catch (err) {
         this.errorMessage = err.message;
@@ -232,6 +242,7 @@ export const lobbyUI = {
 
     document.getElementById('btn-leave-room').addEventListener('click', async () => {
       await roomService.leaveRoom(code, currentUid);
+      await roomService.setActiveRoom(currentUid, null);
       gameState.clearRoom();
     });
   }

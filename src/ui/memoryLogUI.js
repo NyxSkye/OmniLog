@@ -36,7 +36,7 @@ export const memoryLogUI = {
             <h2 class="title" style="margin:0; text-align:left;">Case Dossier // Memory Log</h2>
             <span class="subtitle" style="margin:0;">VERIFIED PHYSICAL CLUES VS. SYSTEM DIRECTIVES</span>
           </div>
-          <button type="button" id="btn-close-log" style="width:auto; padding:0.25rem 0.75rem; background:transparent; border:1px solid #e53e3e; color:#fc8181;">✕ Close [TAB]</button>
+          <button type="button" id="btn-close-log" style="width:auto; padding:0.25rem 0.75rem; background:transparent; border:1px solid #e53e3e; color:#fc8181;">✕ Close [ESC]</button>
         </div>
 
         <div class="log-tab-bar">

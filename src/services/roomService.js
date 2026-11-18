@@ -185,5 +185,53 @@ export const roomService = {
       }
       await update(ref(rtdb), updates);
     }
+  },
+
+  /**
+   * Evict — keeps the player record in the room's players list (so they can rejoin),
+   * but marks them as offline and evicted. Does NOT delete transforms immediately.
+   */
+  async evictFromRoom(roomCode, uid) {
+    const playerRef = ref(rtdb, `rooms/${roomCode}/players/${uid}`);
+    await update(playerRef, {
+      online: false,
+      evicted: true,
+      evictedAt: Date.now()
+    });
+    // Clean up their live transform
+    await remove(ref(rtdb, `rooms/${roomCode}/transforms/${uid}`));
+  },
+
+  /**
+   * Mark a player as offline without removing them (used by Save & Quit).
+   */
+  async markOffline(roomCode, uid) {
+    const playerRef = ref(rtdb, `rooms/${roomCode}/players/${uid}`);
+    await update(playerRef, { online: false });
+    await remove(ref(rtdb, `rooms/${roomCode}/transforms/${uid}`));
+  },
+
+  /**
+   * Enforce one-room-at-a-time rule.
+   * Looks up the player's `activeRoom` field and evicts them from it
+   * before allowing them to join a new room.
+   */
+  async ensureSingleRoom(uid) {
+    const playerRoomRef = ref(rtdb, `players/${uid}/activeRoom`);
+    const snap = await get(playerRoomRef);
+    if (snap.exists()) {
+      const prevCode = snap.val();
+      if (prevCode) {
+        await this.evictFromRoom(prevCode, uid);
+      }
+    }
+  },
+
+  /**
+   * Write the player's active room code to their profile
+   * so we can enforce one-room-at-a-time on next join.
+   */
+  async setActiveRoom(uid, roomCode) {
+    await update(ref(rtdb, `players/${uid}`), { activeRoom: roomCode || null });
   }
 };
