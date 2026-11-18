@@ -1,5 +1,5 @@
 export class Player {
-  constructor(uid, displayName = 'Amnesiac Agent') {
+  constructor(uid, displayName = 'Agent Unknown') {
     this.uid = uid;
     this.displayName = displayName;
     this.level = 1;
@@ -33,6 +33,8 @@ export class Player {
     this.items = []; // Array of Item objects
 
     this.cluesFound = [];
+    this.lastPosition = { x: 0, y: 0, z: 0 }; // Persisted world coordinates
+    this.memoryLog = null; // Persisted MemoryLog snapshot
     this.createdAt = Date.now();
     this.lastSaved = Date.now();
   }
@@ -68,6 +70,8 @@ export class Player {
       equipped: this.equipped,
       items: this.items,
       cluesFound: this.cluesFound,
+      lastPosition: this.lastPosition || { x: 0, y: 0, z: 0 },
+      memoryLog: this.memoryLog || null,
       lastSaved: Date.now()
     };
   }

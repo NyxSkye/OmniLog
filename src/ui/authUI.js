@@ -31,7 +31,7 @@ export const authUI = {
         <form id="auth-form">
           <div class="form-group">
             <label for="agent-callsign">Agent Callsign</label>
-            <input type="text" id="agent-callsign" placeholder="e.g. Cipher-07" value="Amnesiac-${Math.floor(Math.random() * 900 + 100)}" required />
+            <input type="text" id="agent-callsign" placeholder="e.g. Cipher-07" required />
           </div>
 
           <div class="form-group" id="email-group" style="${this.isRegistering ? 'display:block' : 'display:none'}">

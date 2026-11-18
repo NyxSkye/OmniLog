@@ -3,7 +3,7 @@ import { rtdb } from '../config/firebase.js';
 import { GameSession } from '../models/GameSession.js';
 
 const CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-const ROOM_EXPIRY_MS = 5 * 60 * 1000;
+const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 export const AGENT_PALETTE = [
   '#00f0ff', // 0: Cyan
@@ -84,10 +84,12 @@ export const roomService = {
     const roomData = snap.val();
     const now = Date.now();
 
-    if (roomData.emptySince && (now - roomData.emptySince > ROOM_EXPIRY_MS)) {
+    // Delete any room that has been around for 12+ hours with no one online
+    const onlinePlayers = Object.values(roomData.players || {}).filter(p => p.online);
+    const roomAge = now - (roomData.createdAt || 0);
+    if (onlinePlayers.length === 0 && roomAge > ROOM_EXPIRY_MS) {
       await remove(roomRef);
-      await remove(ref(rtdb, `rooms/${roomCode}/transforms`));
-      throw new Error(`Room [${roomCode}] has expired due to 5 minutes of inactivity.`);
+      throw new Error(`Room [${roomCode}] has expired after 12 hours of inactivity and has been removed.`);
     }
 
     const existingPlayer = roomData.players && roomData.players[user.uid];
@@ -97,7 +99,6 @@ export const roomService = {
         online: true,
         displayName: user.displayName || existingPlayer.displayName
       });
-      await update(ref(rtdb, `rooms/${roomCode}`), { emptySince: null });
 
       const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}/online`);
       onDisconnect(onlineRef).set(false);
@@ -128,8 +129,6 @@ export const roomService = {
       online: true,
       joinedAt: Date.now()
     });
-
-    await update(ref(rtdb, `rooms/${roomCode}`), { emptySince: null });
 
     const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}/online`);
     onDisconnect(onlineRef).set(false);
@@ -171,9 +170,7 @@ export const roomService = {
 
     const remainingUids = Object.keys(players);
     if (remainingUids.length === 0) {
-      await update(ref(rtdb, `rooms/${roomCode}`), {
-        emptySince: Date.now()
-      });
+      // No players left — room will be cleaned up on the next join attempt after 12 hours
       await remove(ref(rtdb, `rooms/${roomCode}/transforms`));
     } else {
       const updates = {};

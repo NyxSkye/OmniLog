@@ -4,7 +4,7 @@ import { Player } from '../models/Player.js';
 
 export const databaseService = {
   // Fetch existing save or initialize a new blank slate via Realtime Database
-  async getOrCreatePlayer(user) {
+  async getOrCreatePlayer(user, resolvedName = null) {
     const playerRef = ref(rtdb, `players/${user.uid}`);
     const snap = await get(playerRef);
 
@@ -12,7 +12,8 @@ export const databaseService = {
       return Player.fromFirestore(snap.val());
     }
 
-    const newPlayer = new Player(user.uid, user.displayName || 'Amnesiac Agent');
+    const displayName = resolvedName || user.displayName;
+    const newPlayer = new Player(user.uid, displayName);
     await set(playerRef, newPlayer.toFirestore());
     return newPlayer;
   },

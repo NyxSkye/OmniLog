@@ -282,6 +282,7 @@ export const agentDossierUI = {
           player.removeItem(this.selectedItemIndex);
           this.selectedItem = null;
           this.selectedItemIndex = -1;
+          if (this._logInstance) player.memoryLog = this._logInstance.toJSON();
           await databaseService.savePlayerProgress(player);
           this._render();
           window.dispatchEvent(new CustomEvent('update-vitals'));
@@ -295,6 +296,7 @@ export const agentDossierUI = {
           if (item.type === 'BACKPACK') player.equipped.backpack = item;
           this.selectedItem = null;
           this.selectedItemIndex = -1;
+          if (this._logInstance) player.memoryLog = this._logInstance.toJSON();
           await databaseService.savePlayerProgress(player);
           this._render();
           window.dispatchEvent(new CustomEvent('update-vitals'));
@@ -307,6 +309,7 @@ export const agentDossierUI = {
           player.removeItem(this.selectedItemIndex);
           this.selectedItem = null;
           this.selectedItemIndex = -1;
+          if (this._logInstance) player.memoryLog = this._logInstance.toJSON();
           await databaseService.savePlayerProgress(player);
           this._render();
           window.dispatchEvent(new CustomEvent('update-vitals'));

@@ -135,7 +135,11 @@ function mountGameShell() {
   `;
 
   updateSquadHUD();
-  chatUI.init(uiRoot);
+
+  // Chat is only available in multiplayer sessions
+  if (!isSolo) {
+    chatUI.init(uiRoot);
+  }
 }
 
 function spawnTestAnomalies() {
@@ -185,6 +189,9 @@ function init3DWorld() {
   if (isGameRunning) return;
   isGameRunning = true;
 
+  // Show the 3D canvas
+  canvas.style.display = 'block';
+
   mountGameShell();
 
   memoryLog = new MemoryLog(authState.currentUser.uid);
@@ -210,6 +217,17 @@ function init3DWorld() {
     100
   );
 
+  // Restore last saved position if one exists
+  const savedPos = authState.player?.lastPosition;
+  if (savedPos && (savedPos.x !== 0 || savedPos.y !== 0 || savedPos.z !== 0)) {
+    localPlayer.group.position.set(savedPos.x, savedPos.y, savedPos.z);
+  }
+
+  // Restore memory log from last save if available
+  if (authState.player?.memoryLog) {
+    memoryLog = MemoryLog.fromJSON(authState.player.memoryLog, authState.currentUser.uid);
+  }
+
   inputManager = new InputManager(canvas, (deltaX, deltaY) => {
     cameraManager.handleMouseLook(deltaX, deltaY);
   });
@@ -227,7 +245,7 @@ function init3DWorld() {
   }
 
   // Wire up the pause menu
-  pauseMenuUI.init(memoryLog, async (action) => {
+  pauseMenuUI.init(memoryLog, localPlayer, async (action) => {
     // action is 'quit' or 'evict'
     await teardownGame();
     if (action === 'evict') {
@@ -237,7 +255,7 @@ function init3DWorld() {
       // Save & quit — same: keep record, just go back to lobby/auth
       gameState.clearRoom();
     }
-    switchView(authState.currentUser ? 'lobby' : 'auth');
+    switchView('auth');
   });
 
   // Keybindings: M [Inventory], Tab [Memory Log], E [Interact], ESC [Pause]
@@ -356,6 +374,8 @@ function handleProximityInteraction() {
         showToast(`+ Verified Clue Unlocked: "${node.clueData.title}" (Press [TAB] → Clues)`);
       }
 
+      // Keep memoryLog snapshot in sync before every mid-game save
+      player.memoryLog = memoryLog.toJSON();
       databaseService.savePlayerProgress(player);
       updateSquadHUD();
 
@@ -399,6 +419,9 @@ function teardownGame() {
 
   // Mark not in game so switchView works
   gameState.setInGame(false);
+
+  // Hide the 3D canvas so it doesn't bleed through the lobby/auth UI
+  canvas.style.display = 'none';
 }
 
 function switchView(view) {
@@ -430,7 +453,10 @@ authService.onAuthChange(async (user) => {
   if (user) {
     authState.setUser(user);
     try {
-      const player = await databaseService.getOrCreatePlayer(user);
+      // Use the pending callsign if displayName hasn't propagated yet
+      const resolvedName = user.displayName || authService._pendingCallsign || null;
+      authService._pendingCallsign = null;
+      const player = await databaseService.getOrCreatePlayer(user, resolvedName);
       authState.setPlayer(player);
     } catch (error) {
       console.error('Failed to sync player:', error);

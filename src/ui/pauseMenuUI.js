@@ -18,16 +18,19 @@ import { agentDossierUI } from './agentDossierUI.js';
 export const pauseMenuUI = {
   isOpen: false,
   _memoryLogRef: null,  // Set from main.js so we can open the log from here
+  _localPlayerRef: null, // Set from main.js for position snapshot on save
   _onQuit: null,        // Callback — called when player saves & quits or evicts
   _activePanel: 'main', // 'main' | 'controls' | 'settings'
 
   /**
    * Call once from main.js to wire up dependencies.
    * @param {MemoryLog} memoryLogInstance
+   * @param {PlayerCharacter} localPlayerInstance
    * @param {Function} onQuitCallback  — called with ('quit' | 'evict') when the session ends
    */
-  init(memoryLogInstance, onQuitCallback) {
+  init(memoryLogInstance, localPlayerInstance, onQuitCallback) {
     this._memoryLogRef = memoryLogInstance;
+    this._localPlayerRef = localPlayerInstance;
     this._onQuit = onQuitCallback;
   },
 
@@ -266,7 +269,10 @@ export const pauseMenuUI = {
     this._setButtonsDisabled(true);
 
     try {
-      // 1. Save player stats
+      // 1. Snapshot position and memory log onto player before saving
+      this._snapshotSessionState();
+
+      // 2. Save player stats
       if (player) {
         await databaseService.savePlayerProgress(player);
       }
@@ -306,7 +312,8 @@ export const pauseMenuUI = {
     this._setButtonsDisabled(true);
 
     try {
-      // Save progress before leaving
+      // Save position and memory log, then player progress before leaving
+      this._snapshotSessionState();
       if (authState.player) {
         await databaseService.savePlayerProgress(authState.player);
       }
@@ -320,6 +327,22 @@ export const pauseMenuUI = {
     } catch (err) {
       console.error('Evict failed:', err);
       this._setButtonsDisabled(false);
+    }
+  },
+
+  _snapshotSessionState() {
+    const player = authState.player;
+    if (!player) return;
+
+    // Persist current world position
+    if (this._localPlayerRef) {
+      const pos = this._localPlayerRef.getPosition();
+      player.lastPosition = { x: pos.x, y: pos.y, z: pos.z };
+    }
+
+    // Persist memory log contents
+    if (this._memoryLogRef) {
+      player.memoryLog = this._memoryLogRef.toJSON();
     }
   },
 

@@ -4,11 +4,17 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updateProfile
+  updateProfile,
+  deleteUser
 } from 'firebase/auth';
-import { auth } from '../config/firebase.js';
+import { ref, remove } from 'firebase/database';
+import { auth, rtdb } from '../config/firebase.js';
 
 export const authService = {
+  // Holds a callsign set before onAuthStateChanged fires, so getOrCreatePlayer
+  // can use the correct name even if updateProfile hasn't resolved yet.
+  _pendingCallsign: null,
+
   // Listen to auth state transitions
   onAuthChange(callback) {
     return onAuthStateChanged(auth, callback);
@@ -16,6 +22,7 @@ export const authService = {
 
   // Anonymous instant guest play
   async loginAsGuest(customName = 'Agent Unknown') {
+    this._pendingCallsign = customName;
     const credential = await signInAnonymously(auth);
     await updateProfile(credential.user, { displayName: customName });
     return credential.user;
@@ -23,6 +30,7 @@ export const authService = {
 
   // Permanent account registration
   async registerWithEmail(email, password, displayName) {
+    this._pendingCallsign = displayName;
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(credential.user, { displayName });
     return credential.user;
@@ -34,9 +42,20 @@ export const authService = {
     return credential.user;
   },
 
-  // Sign out
+  // Sign out — if anonymous, wipe the player record and delete the auth account entirely
   async logout() {
-    return await signOut(auth);
+    const user = auth.currentUser;
+    if (user) {
+      // Always remove the player profile from the database
+      await remove(ref(rtdb, `players/${user.uid}`));
+
+      if (user.isAnonymous) {
+        // Delete the throwaway Firebase Auth account so it doesn't pile up
+        await deleteUser(user);
+      } else {
+        await signOut(auth);
+      }
+    }
   },
 
   getCurrentUser() {
