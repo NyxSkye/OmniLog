@@ -2,7 +2,7 @@ import { authState } from '../state/authState.js';
 import { gameState } from '../state/gameState.js';
 import { databaseService } from '../services/databaseService.js';
 import { roomService } from '../services/roomService.js';
-import { memoryLogUI } from './memoryLogUI.js';
+import { agentDossierUI } from './agentDossierUI.js';
 
 /**
  * Pause Menu — triggered by [ESC] while in-game.
@@ -198,9 +198,7 @@ export const pauseMenuUI = {
     if (memBtn) {
       memBtn.addEventListener('click', () => {
         this.close();
-        if (this._memoryLogRef) {
-          memoryLogUI.toggle(this._memoryLogRef);
-        }
+        agentDossierUI.open(this._memoryLogRef, 'clues');
       });
     }
 

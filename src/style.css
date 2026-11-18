@@ -680,3 +680,70 @@ button.secondary:hover {
   letter-spacing: 0.05em;
   margin-bottom: 0;
 }
+
+/* ============================================================
+   AGENT DOSSIER  (TAB)  —  combined Storage + Memory Log panel
+   ============================================================ */
+.dossier-panel {
+  pointer-events: auto;
+  background: rgba(10, 16, 26, 0.97);
+  border: 1px solid #1a365d;
+  box-shadow: 0 0 30px rgba(0, 195, 255, 0.18);
+  backdrop-filter: blur(10px);
+  padding: 1.5rem;
+  border-radius: 4px;
+  width: 95%;
+  max-width: 920px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.dossier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #1a365d;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+/* Top-level tab bar */
+.dossier-tab-bar {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.dossier-tab {
+  background: #0d1522;
+  border: 1px solid #2d3748;
+  color: #718096;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  width: auto;
+  transition: all 0.15s ease;
+}
+
+.dossier-tab:hover {
+  border-color: #00d9ff;
+  color: #c8e6f0;
+}
+
+.dossier-tab.active {
+  border-color: #00d9ff;
+  color: #00f0ff;
+  background: rgba(0, 217, 255, 0.12);
+  box-shadow: 0 0 8px rgba(0, 217, 255, 0.15);
+}
+
+/* Scrollable body */
+.dossier-body {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}

@@ -8,6 +8,7 @@ import { inventoryUI } from './ui/inventoryUI.js';
 import { memoryLogUI } from './ui/memoryLogUI.js';
 import { chatUI } from './ui/chatUI.js';
 import { pauseMenuUI } from './ui/pauseMenuUI.js';
+import { agentDossierUI } from './ui/agentDossierUI.js';
 import { roomService, getAgentColorHex } from './services/roomService.js';
 
 import { SceneManager } from './engine/sceneManager.js';
@@ -127,8 +128,7 @@ function mountGameShell() {
       <strong>CONTROLS:</strong><br>
       • WASD: Move | MOUSE: Orbit Camera | SPACE: Jump<br>
       • [E]: Inspect / Scavenge Anomaly<br>
-      • [M]: Grid Storage &amp; Equip<br>
-      • [TAB]: Memory Log (Clues &amp; Directives)<br>
+      • [TAB]: Agent Dossier (Storage &amp; Log)<br>
       • [ENTER]: Squad Comms Chat<br>
       • [ESC]: Pause Menu
     </div>
@@ -250,21 +250,17 @@ function init3DWorld() {
     if (e.code === 'Escape') {
       e.preventDefault();
       // ESC = one step back through the stack:
-      // sub-panel → pause main → close pause (resume) ← inventory ← memory log
+      // pause sub-panel → pause main → close pause (resume) ← dossier
       if (pauseMenuUI.isOpen) {
         pauseMenuUI.handleEsc();
         return;
       }
-      if (inventoryUI.isOpen) { inventoryUI.toggle(); return; }
-      if (memoryLogUI.isOpen) { memoryLogUI.toggle(memoryLog); return; }
+      if (agentDossierUI.isOpen) { agentDossierUI.close(); return; }
       pauseMenuUI.toggle();
-    }
-    if (e.code === 'KeyM') {
-      inventoryUI.toggle();
     }
     if (e.code === 'Tab') {
       e.preventDefault();
-      memoryLogUI.toggle(memoryLog);
+      agentDossierUI.toggle(memoryLog);
     }
     if (e.code === 'KeyE') {
       handleProximityInteraction();
@@ -347,7 +343,7 @@ function handleProximityInteraction() {
         const added = player.addItem(node.itemData);
         if (added) {
           memoryLog.addDailyEntry(`Scavenged: ${node.itemData.name}`);
-          showToast(`+ Acquired: ${node.itemData.name} (Press [M] to inspect)`);
+          showToast(`+ Acquired: ${node.itemData.name} (Press [TAB] to inspect)`);
         } else {
           showToast(`Grid Full! Cannot acquire: ${node.itemData.name}`);
           return;
@@ -357,7 +353,7 @@ function handleProximityInteraction() {
       if (node.clueData) {
         memoryLog.addClue(node.clueData);
         player.sp += 2;
-        showToast(`+ Verified Clue Unlocked: "${node.clueData.title}" (Press [TAB])`);
+        showToast(`+ Verified Clue Unlocked: "${node.clueData.title}" (Press [TAB] → Clues)`);
       }
 
       databaseService.savePlayerProgress(player);
