@@ -3,7 +3,7 @@ import { databaseService } from '../services/databaseService.js';
 
 /**
  * Agent Dossier — single combined panel for Grid Storage + Memory Log.
- * Opened/closed with [TAB]. ESC closes it via the global ESC stack.
+ * Opened/closed with [P]. ESC closes it via the global ESC stack.
  *
  * Tabs: 'inventory' | 'clues' | 'directives' | 'daily'
  */

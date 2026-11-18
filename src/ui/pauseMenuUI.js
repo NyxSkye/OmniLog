@@ -152,7 +152,7 @@ export const pauseMenuUI = {
           <div class="ctrl-row"><kbd>SPACE</kbd><span>Jump</span></div>
           <div class="ctrl-row"><kbd>E</kbd><span>Inspect / Scavenge Anomaly</span></div>
           <div class="ctrl-row"><kbd>M</kbd><span>Grid Storage &amp; Equip</span></div>
-          <div class="ctrl-row"><kbd>TAB</kbd><span>Memory Log</span></div>
+          <div class="ctrl-row"><kbd>P</kbd><span>Memory Log</span></div>
           <div class="ctrl-row"><kbd>ENTER</kbd><span>Squad Comms Chat</span></div>
           <div class="ctrl-row"><kbd>ESC</kbd><span>Pause / Navigate Back</span></div>
         </div>

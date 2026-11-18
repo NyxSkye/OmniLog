@@ -4,7 +4,6 @@ import { authState } from './state/authState.js';
 import { gameState } from './state/gameState.js';
 import { authUI } from './ui/authUI.js';
 import { lobbyUI } from './ui/lobbyUI.js';
-import { inventoryUI } from './ui/inventoryUI.js';
 import { memoryLogUI } from './ui/memoryLogUI.js';
 import { chatUI } from './ui/chatUI.js';
 import { pauseMenuUI } from './ui/pauseMenuUI.js';
@@ -128,7 +127,7 @@ function mountGameShell() {
       <strong>CONTROLS:</strong><br>
       • WASD: Move | MOUSE: Orbit Camera | SPACE: Jump<br>
       • [E]: Inspect / Scavenge Anomaly<br>
-      • [TAB]: Agent Dossier (Storage &amp; Log)<br>
+      • [P]: Agent Dossier (Storage &amp; Log)<br>
       • [ENTER]: Squad Comms Chat<br>
       • [ESC]: Pause Menu
     </div>
@@ -258,7 +257,7 @@ function init3DWorld() {
     switchView('auth');
   });
 
-  // Keybindings: M [Inventory], Tab [Memory Log], E [Interact], ESC [Pause]
+  // Keybindings: P [Memory Log], E [Interact], ESC [Pause]
   window.addEventListener('keydown', (e) => {
     // Prevent actions while typing into chat
     if (document.activeElement && document.activeElement.tagName === 'INPUT') {
@@ -276,7 +275,7 @@ function init3DWorld() {
       if (agentDossierUI.isOpen) { agentDossierUI.close(); return; }
       pauseMenuUI.toggle();
     }
-    if (e.code === 'Tab') {
+    if (e.code === 'KeyP') {
       e.preventDefault();
       agentDossierUI.toggle(memoryLog);
     }
@@ -361,7 +360,7 @@ function handleProximityInteraction() {
         const added = player.addItem(node.itemData);
         if (added) {
           memoryLog.addDailyEntry(`Scavenged: ${node.itemData.name}`);
-          showToast(`+ Acquired: ${node.itemData.name} (Press [TAB] to inspect)`);
+          showToast(`+ Acquired: ${node.itemData.name} (Press [P] to inspect)`);
         } else {
           showToast(`Grid Full! Cannot acquire: ${node.itemData.name}`);
           return;
@@ -371,7 +370,7 @@ function handleProximityInteraction() {
       if (node.clueData) {
         memoryLog.addClue(node.clueData);
         player.sp += 2;
-        showToast(`+ Verified Clue Unlocked: "${node.clueData.title}" (Press [TAB] → Clues)`);
+        showToast(`+ Verified Clue Unlocked: "${node.clueData.title}" (Press [P] → Clues)`);
       }
 
       // Keep memoryLog snapshot in sync before every mid-game save
