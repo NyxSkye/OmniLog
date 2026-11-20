@@ -19,10 +19,15 @@ export class CameraManager {
     this.currentPosition = new THREE.Vector3();
     this.targetLookAt = new THREE.Vector3();
 
-    window.addEventListener('resize', () => {
+    this.handleResize = () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
-    });
+    };
+    window.addEventListener('resize', this.handleResize);
+  }
+
+  destroy() {
+    window.removeEventListener('resize', this.handleResize);
   }
 
   handleMouseLook(deltaX, deltaY) {

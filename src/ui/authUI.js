@@ -1,14 +1,25 @@
-import { authService } from '../services/authService.js';
-import { databaseService } from '../services/databaseService.js';
 import { authState } from '../state/authState.js';
+import {
+  authService,
+  generateCallsign,
+  normalizeCallsign
+} from '../services/authService.js';
 
 export const authUI = {
   container: null,
-  isRegistering: false,
+  noticeMessage: '',
+  unsubscribe: null,
+  generatedCallsign: '',
 
   init(containerElement) {
     this.container = containerElement;
-    authState.subscribe(() => this.render());
+    if (this.unsubscribe) this.unsubscribe();
+    this.unsubscribe = authState.subscribe(() => this.render());
+    this.render();
+  },
+
+  setNotice(message) {
+    this.noticeMessage = message;
     this.render();
   },
 
@@ -16,119 +27,62 @@ export const authUI = {
     if (!this.container) return;
 
     if (authState.currentUser && authState.player) {
-      this.renderProfile();
+      this.renderHome();
     } else {
       this.renderAuthForm();
     }
   },
 
   renderAuthForm(errorMessage = '') {
+    if (!this.generatedCallsign) this.generatedCallsign = generateCallsign();
     this.container.innerHTML = `
       <div class="panel">
         <h1 class="title">OmniLog // Terminal</h1>
-        <p class="subtitle">Dimensional Breach Reconnaissance Unit</p>
-
-        <form id="auth-form">
-          <div class="form-group">
-            <label for="agent-callsign">Agent Callsign</label>
-            <input type="text" id="agent-callsign" placeholder="e.g. Cipher-07" required />
-          </div>
-
-          <div class="form-group" id="email-group" style="${this.isRegistering ? 'display:block' : 'display:none'}">
-            <label for="agent-email">Secure Comm Relay (Email)</label>
-            <input type="email" id="agent-email" placeholder="agent@breach.net" />
-          </div>
-
-          <div class="form-group" id="pass-group" style="${this.isRegistering ? 'display:block' : 'display:none'}">
-            <label for="agent-pass">Encryption Key (Password)</label>
-            <input type="password" id="agent-pass" placeholder="••••••••" />
-          </div>
-
-          <div class="button-stack">
-            <button type="button" id="btn-guest">Enter as Guest (Instant Access)</button>
-            <button type="submit" id="btn-submit" class="secondary" style="${this.isRegistering ? 'display:block' : 'display:none'}">
-              Register Credentials
-            </button>
-            <button type="button" id="btn-toggle-mode" class="secondary">
-              ${this.isRegistering ? 'Back to Quick Access' : 'Create Persistent Cloud Account'}
-            </button>
-          </div>
-          ${errorMessage ? `<p class="error-text">${errorMessage}</p>` : ''}
-        </form>
+        <p class="subtitle">A short breach. A story that stays with you.</p>
+        <div class="form-group">
+          <label for="agent-callsign">Your Callsign (editable)</label>
+          <input type="text" id="agent-callsign" maxlength="24" />
+          <small>Letters, numbers, spaces, hyphens, and underscores.</small>
+        </div>
+        <div class="button-stack">
+          <button type="button" id="btn-guest">Begin as Guest</button>
+        </div>
+        ${this.noticeMessage ? `<p class="error-text">${this.noticeMessage}</p>` : ''}
+        ${errorMessage ? `<p class="error-text">${errorMessage}</p>` : ''}
       </div>
     `;
+    document.getElementById('agent-callsign').value = this.generatedCallsign;
 
-    this.bindAuthEvents();
-  },
-
-  bindAuthEvents() {
-    const form = document.getElementById('auth-form');
-    const guestBtn = document.getElementById('btn-guest');
-    const toggleBtn = document.getElementById('btn-toggle-mode');
-
-    guestBtn.addEventListener('click', async () => {
-      const callsign = document.getElementById('agent-callsign').value.trim() || 'Agent Unknown';
+    document.getElementById('btn-guest').addEventListener('click', async () => {
+      const callsign = normalizeCallsign(document.getElementById('agent-callsign').value)
+        || this.generatedCallsign;
       try {
+        this.noticeMessage = '';
+        this.generatedCallsign = callsign;
         await authService.loginAsGuest(callsign);
-      } catch (err) {
-        this.renderAuthForm(err.message);
-      }
-    });
-
-    toggleBtn.addEventListener('click', () => {
-      this.isRegistering = !this.isRegistering;
-      this.render();
-    });
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('agent-email').value.trim();
-      const pass = document.getElementById('agent-pass').value;
-      const callsign = document.getElementById('agent-callsign').value.trim();
-
-      try {
-        await authService.registerWithEmail(email, pass, callsign);
+        this.generatedCallsign = generateCallsign();
       } catch (err) {
         this.renderAuthForm(err.message);
       }
     });
   },
 
-  renderProfile() {
+  renderHome() {
     const { player } = authState;
-
     this.container.innerHTML = `
       <div class="panel">
-        <h1 class="title">Agent Identity Verified</h1>
-        <p class="subtitle">Status: Synchronized with Multiverse Anchor</p>
-
-        <div class="status-grid">
-          <div class="status-item">
-            <span>CALLSIGN</span>
-            <strong>${player.displayName}</strong>
-          </div>
-          <div class="status-item">
-            <span>LEVEL / SP</span>
-            <strong>Lv. ${player.level} (${player.sp} SP)</strong>
-          </div>
-          <div class="status-item">
-            <span>HEALTH / STAMINA</span>
-            <strong>${player.stats.currentHealth} HP / ${player.stats.currentStamina} STA</strong>
-          </div>
-          <div class="status-item">
-            <span>ARCANA POOL</span>
-            <strong>${player.stats.currentMana} MANA (Locked)</strong>
-          </div>
-        </div>
-
+        <h1 class="title" id="agent-welcome"></h1>
+        <p class="subtitle">Choose how to enter the breach.</p>
+        <p class="subtitle">Refresh to resume. Four hours without player input ends the run.</p>
         <div class="button-stack">
-          <button type="button" id="btn-deploy-solo">Deploy Solo (Practice Breach)</button>
-          <button type="button" id="btn-to-lobby">Multiplayer Matchmaking Chamber</button>
-          <button type="button" id="btn-simulate-sp" class="secondary">Test Progress: Grant +1 SP</button>
-          <button type="button" id="btn-logout" class="secondary">Sever Uplink (Log Out)</button>
+          <button type="button" id="btn-deploy-solo">Start Solo Run</button>
+          <button type="button" id="btn-to-lobby" class="secondary">Play Multiplayer</button>
+          <button type="button" id="btn-logout" class="secondary">End Run &amp; Log Out</button>
         </div>
+        ${this.noticeMessage ? `<p class="error-text">${this.noticeMessage}</p>` : ''}
       </div>
     `;
+    document.getElementById('agent-welcome').textContent = `Welcome, ${player.displayName}`;
 
     document.getElementById('btn-deploy-solo').addEventListener('click', () => {
       this.container.dispatchEvent(new CustomEvent('start-solo-game'));
@@ -138,14 +92,8 @@ export const authUI = {
       this.container.dispatchEvent(new CustomEvent('nav-lobby'));
     });
 
-    document.getElementById('btn-simulate-sp').addEventListener('click', async () => {
-      player.sp += 1;
-      await databaseService.savePlayerProgress(player);
-      authState.setPlayer(player);
-    });
-
-    document.getElementById('btn-logout').addEventListener('click', async () => {
-      await authService.logout();
+    document.getElementById('btn-logout').addEventListener('click', () => {
+      this.container.dispatchEvent(new CustomEvent('logout-request'));
     });
   }
 };

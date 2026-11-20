@@ -1,9 +1,10 @@
-import { ref, get, set, update, remove, onValue, onDisconnect } from 'firebase/database';
+import { ref, get, set, update, remove, onValue, onDisconnect, runTransaction } from 'firebase/database';
 import { rtdb } from '../config/firebase.js';
 import { GameSession } from '../models/GameSession.js';
+import { normalizeCallsign } from './authService.js';
+import { RUN_EXPIRY_MS } from './runSessionService.js';
 
 const CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 export const AGENT_PALETTE = [
   '#00f0ff', // 0: Cyan
@@ -26,6 +27,20 @@ export function getAgentColorHex(uid) {
   return AGENT_PALETTE[index];
 }
 
+function getUniqueCallsign(requestedName, players) {
+  const baseName = normalizeCallsign(requestedName) || 'Agent';
+  const takenNames = new Set(
+    Object.values(players || {}).map(player => (player.displayName || '').toLowerCase())
+  );
+  if (!takenNames.has(baseName.toLowerCase())) return baseName;
+
+  for (let suffix = 2; ; suffix++) {
+    const suffixText = `-${suffix}`;
+    const uniqueName = `${baseName.slice(0, 24 - suffixText.length)}${suffixText}`;
+    if (!takenNames.has(uniqueName.toLowerCase())) return uniqueName;
+  }
+}
+
 export const roomService = {
   generateRoomCode() {
     let code = '';
@@ -45,6 +60,14 @@ export const roomService = {
       const checkRef = ref(rtdb, `rooms/${roomCode}`);
       const snap = await get(checkRef);
       exists = snap.exists();
+      if (exists) {
+        const existingRoom = snap.val();
+        const lastActivityAt = existingRoom.lastActivityAt || existingRoom.createdAt || 0;
+        if (Date.now() - lastActivityAt >= RUN_EXPIRY_MS) {
+          await this.expireRoom(roomCode);
+          exists = (await get(checkRef)).exists();
+        }
+      }
       attempts++;
     }
 
@@ -54,12 +77,17 @@ export const roomService = {
 
     const roomRef = ref(rtdb, `rooms/${roomCode}`);
     const defaultColor = AGENT_PALETTE[0]; // Host gets slot 0 (Cyan) by default
-    const session = new GameSession(roomCode, hostUser.uid, hostUser.displayName || 'Agent Host');
+    const session = new GameSession(
+      roomCode,
+      hostUser.uid,
+      normalizeCallsign(hostUser.displayName) || 'Agent'
+    );
 
     session.players[hostUser.uid].color = defaultColor;
     session.players[hostUser.uid].online = true;
     session.players[hostUser.uid].hp = 100;
     session.players[hostUser.uid].maxHp = 100;
+    session.lastActivityAt = Date.now();
 
     await set(roomRef, session.toJSON());
 
@@ -71,34 +99,59 @@ export const roomService = {
 
   async joinRoom(roomCode, user) {
     if (!roomCode || roomCode.length !== 6) {
-      throw new Error('Room code must be exactly 6 characters.');
+      const error = new Error('Room code must be exactly 6 characters.');
+      error.code = 'room/invalid-code';
+      throw error;
     }
 
     const roomRef = ref(rtdb, `rooms/${roomCode}`);
     const snap = await get(roomRef);
 
     if (!snap.exists()) {
-      throw new Error(`Room [${roomCode}] not found. Codes are case-sensitive.`);
+      const error = new Error(`Room [${roomCode}] not found. Codes are case-sensitive.`);
+      error.code = 'room/not-found';
+      throw error;
     }
 
-    const roomData = snap.val();
     const now = Date.now();
 
-    // Delete any room that has been around for 12+ hours with no one online
-    const onlinePlayers = Object.values(roomData.players || {}).filter(p => p.online);
-    const roomAge = now - (roomData.createdAt || 0);
-    if (onlinePlayers.length === 0 && roomAge > ROOM_EXPIRY_MS) {
-      await remove(roomRef);
-      throw new Error(`Room [${roomCode}] has expired after 12 hours of inactivity and has been removed.`);
+    let roomData = snap.val();
+    const lastActivityAt = roomData.lastActivityAt || roomData.createdAt || 0;
+    if (now - lastActivityAt >= RUN_EXPIRY_MS) {
+      const expired = await this.expireRoom(roomCode);
+      if (expired) {
+        const error = new Error(`Room [${roomCode}] expired after four hours without player input.`);
+        error.code = 'room/expired';
+        throw error;
+      }
+
+      const refreshedRoom = await get(roomRef);
+      if (!refreshedRoom.exists()) {
+        const error = new Error(`Room [${roomCode}] expired after four hours without player input.`);
+        error.code = 'room/expired';
+        throw error;
+      }
+      roomData = refreshedRoom.val();
     }
 
     const existingPlayer = roomData.players && roomData.players[user.uid];
 
     if (existingPlayer) {
+      const otherPlayers = Object.fromEntries(
+        Object.entries(roomData.players).filter(([uid]) => uid !== user.uid)
+      );
+      const currentCallsign = existingPlayer.displayName || '';
+      const requestedCallsign = /^Agent (Unknown|Guest|Host)$/i.test(currentCallsign)
+        ? user.displayName
+        : currentCallsign;
       await update(ref(rtdb, `rooms/${roomCode}/players/${user.uid}`), {
         online: true,
-        displayName: user.displayName || existingPlayer.displayName
+        displayName: getUniqueCallsign(
+          requestedCallsign || user.displayName,
+          otherPlayers
+        )
       });
+      await this.touchRoomActivity(roomCode);
 
       const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}/online`);
       onDisconnect(onlineRef).set(false);
@@ -117,11 +170,12 @@ export const roomService = {
     // Default color assigned strictly by join order
     const nextSlotIndex = currentPlayers.length % AGENT_PALETTE.length;
     const assignedColor = AGENT_PALETTE[nextSlotIndex];
+    const callsign = getUniqueCallsign(user.displayName, roomData.players);
 
     const playerRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}`);
     await set(playerRef, {
       uid: user.uid,
-      displayName: user.displayName || 'Agent Guest',
+      displayName: callsign,
       isReady: false,
       color: assignedColor,
       hp: 100,
@@ -129,6 +183,7 @@ export const roomService = {
       online: true,
       joinedAt: Date.now()
     });
+    await this.touchRoomActivity(roomCode);
 
     const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}/online`);
     onDisconnect(onlineRef).set(false);
@@ -140,23 +195,58 @@ export const roomService = {
   async updatePlayerColor(roomCode, uid, newColorHex) {
     const colorRef = ref(rtdb, `rooms/${roomCode}/players/${uid}/color`);
     await set(colorRef, newColorHex);
+    await this.touchRoomActivity(roomCode);
   },
 
   subscribeToRoom(roomCode, callback) {
     const roomRef = ref(rtdb, `rooms/${roomCode}`);
-    return onValue(roomRef, (snapshot) => {
-      callback(snapshot.val());
+    let expiryTimer = null;
+    const unsubscribe = onValue(roomRef, (snapshot) => {
+      if (expiryTimer) clearTimeout(expiryTimer);
+      const room = snapshot.val();
+      if (!room) {
+        callback(null);
+        return;
+      }
+
+      const lastActivityAt = room.lastActivityAt || room.createdAt || 0;
+      const expiresIn = RUN_EXPIRY_MS - (Date.now() - lastActivityAt);
+      if (expiresIn <= 0) {
+        this.expireRoom(roomCode).catch(error => {
+          console.error(`Could not expire room [${roomCode}]:`, error);
+        });
+      } else {
+        expiryTimer = setTimeout(() => {
+          this.expireRoom(roomCode).catch(error => {
+            console.error(`Could not expire room [${roomCode}]:`, error);
+          });
+        }, expiresIn);
+      }
+
+      callback(room);
     });
+    return () => {
+      if (expiryTimer) clearTimeout(expiryTimer);
+      unsubscribe();
+    };
   },
 
   async toggleReady(roomCode, uid, currentReadyState) {
     const readyRef = ref(rtdb, `rooms/${roomCode}/players/${uid}/isReady`);
     await set(readyRef, !currentReadyState);
+    await this.touchRoomActivity(roomCode);
   },
 
   async startGame(roomCode) {
-    const statusRef = ref(rtdb, `rooms/${roomCode}/status`);
-    await set(statusRef, 'IN_PROGRESS');
+    const now = Date.now();
+    await update(ref(rtdb, `rooms/${roomCode}`), {
+      status: 'IN_PROGRESS',
+      lastActivityAt: now,
+      runState: {
+        collectedAnomalies: {},
+        players: {}
+      }
+    });
   },
 
   async leaveRoom(roomCode, uid) {
@@ -166,16 +256,18 @@ export const roomService = {
 
     const data = snap.val();
     const players = data.players || {};
+    if (!players[uid]) return;
     delete players[uid];
 
     const remainingUids = Object.keys(players);
     if (remainingUids.length === 0) {
-      // No players left — room will be cleaned up on the next join attempt after 12 hours
-      await remove(ref(rtdb, `rooms/${roomCode}/transforms`));
+      await remove(roomRef);
     } else {
       const updates = {};
       updates[`rooms/${roomCode}/players/${uid}`] = null;
       updates[`rooms/${roomCode}/transforms/${uid}`] = null;
+      updates[`rooms/${roomCode}/runState/players/${uid}`] = null;
+      updates[`rooms/${roomCode}/lastActivityAt`] = Date.now();
 
       if (data.hostUid === uid) {
         updates[`rooms/${roomCode}/hostUid`] = remainingUids[0];
@@ -184,51 +276,19 @@ export const roomService = {
     }
   },
 
-  /**
-   * Evict — keeps the player record in the room's players list (so they can rejoin),
-   * but marks them as offline and evicted. Does NOT delete transforms immediately.
-   */
-  async evictFromRoom(roomCode, uid) {
-    const playerRef = ref(rtdb, `rooms/${roomCode}/players/${uid}`);
-    await update(playerRef, {
-      online: false,
-      evicted: true,
-      evictedAt: Date.now()
-    });
-    // Clean up their live transform
-    await remove(ref(rtdb, `rooms/${roomCode}/transforms/${uid}`));
+  async touchRoomActivity(roomCode, timestamp = Date.now()) {
+    await update(ref(rtdb, `rooms/${roomCode}`), { lastActivityAt: timestamp });
   },
 
-  /**
-   * Mark a player as offline without removing them (used by Save & Quit).
-   */
-  async markOffline(roomCode, uid) {
-    const playerRef = ref(rtdb, `rooms/${roomCode}/players/${uid}`);
-    await update(playerRef, { online: false });
-    await remove(ref(rtdb, `rooms/${roomCode}/transforms/${uid}`));
+  async expireRoom(roomCode) {
+    const roomRef = ref(rtdb, `rooms/${roomCode}`);
+    const result = await runTransaction(roomRef, room => {
+      if (!room) return;
+      const lastActivityAt = room.lastActivityAt || room.createdAt || 0;
+      if (Date.now() - lastActivityAt < RUN_EXPIRY_MS) return;
+      return null;
+    }, { applyLocally: false });
+    return result.committed && !result.snapshot.exists();
   },
 
-  /**
-   * Enforce one-room-at-a-time rule.
-   * Looks up the player's `activeRoom` field and evicts them from it
-   * before allowing them to join a new room.
-   */
-  async ensureSingleRoom(uid) {
-    const playerRoomRef = ref(rtdb, `players/${uid}/activeRoom`);
-    const snap = await get(playerRoomRef);
-    if (snap.exists()) {
-      const prevCode = snap.val();
-      if (prevCode) {
-        await this.evictFromRoom(prevCode, uid);
-      }
-    }
-  },
-
-  /**
-   * Write the player's active room code to their profile
-   * so we can enforce one-room-at-a-time on next join.
-   */
-  async setActiveRoom(uid, roomCode) {
-    await update(ref(rtdb, `players/${uid}`), { activeRoom: roomCode || null });
-  }
 };

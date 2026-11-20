@@ -22,7 +22,8 @@ export class SceneManager {
 
     this.initLighting();
     this.buildHubFloor();
-    this.handleResize();
+    this.handleResize = this.handleResize.bind(this);
+    window.addEventListener('resize', this.handleResize);
   }
 
   initLighting() {
@@ -70,9 +71,22 @@ export class SceneManager {
   }
 
   handleResize() {
-    window.addEventListener('resize', () => {
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  dispose() {
+    window.removeEventListener('resize', this.handleResize);
+    this.scene.traverse(object => {
+      if (object.geometry) object.geometry.dispose();
+      if (object.material) {
+        if (Array.isArray(object.material)) {
+          object.material.forEach(material => material.dispose());
+        } else {
+          object.material.dispose();
+        }
+      }
     });
+    this.renderer.dispose();
   }
 
   render(camera) {

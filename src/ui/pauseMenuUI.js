@@ -1,7 +1,4 @@
-import { authState } from '../state/authState.js';
 import { gameState } from '../state/gameState.js';
-import { databaseService } from '../services/databaseService.js';
-import { roomService } from '../services/roomService.js';
 import { agentDossierUI } from './agentDossierUI.js';
 
 /**
@@ -12,25 +9,21 @@ import { agentDossierUI } from './agentDossierUI.js';
  *  2. Memory Log
  *  3. Controls
  *  4. Settings
- *  5. Save & Quit  (saves progress + checkpoint, returns to lobby/auth)
- *  6. Evict        (removes player from the active room slot; record stays in the room's player registry)
+ *  5. End the solo run or leave the multiplayer run
  */
 export const pauseMenuUI = {
   isOpen: false,
   _memoryLogRef: null,  // Set from main.js so we can open the log from here
-  _localPlayerRef: null, // Set from main.js for position snapshot on save
-  _onQuit: null,        // Callback — called when player saves & quits or evicts
+  _onQuit: null,
   _activePanel: 'main', // 'main' | 'controls' | 'settings'
 
   /**
    * Call once from main.js to wire up dependencies.
    * @param {MemoryLog} memoryLogInstance
-   * @param {PlayerCharacter} localPlayerInstance
-   * @param {Function} onQuitCallback  — called with ('quit' | 'evict') when the session ends
+   * @param {Function} onQuitCallback — called when the player ends or leaves the run
    */
-  init(memoryLogInstance, localPlayerInstance, onQuitCallback) {
+  init(memoryLogInstance, onQuitCallback) {
     this._memoryLogRef = memoryLogInstance;
-    this._localPlayerRef = localPlayerInstance;
     this._onQuit = onQuitCallback;
   },
 
@@ -120,15 +113,9 @@ export const pauseMenuUI = {
             <span class="pause-btn-icon">⚙</span> Settings
           </button>
 
-          <button type="button" class="pause-btn pause-btn-warn" id="pause-save-quit">
-            <span class="pause-btn-icon">💾</span> Save &amp; Quit
+          <button type="button" class="pause-btn pause-btn-danger" id="pause-end-run">
+            <span class="pause-btn-icon">⇠</span> ${isSolo ? 'End Run' : 'Leave Multiplayer Run'}
           </button>
-
-          ${!isSolo ? `
-          <button type="button" class="pause-btn pause-btn-danger" id="pause-evict">
-            <span class="pause-btn-icon">⇠</span> Evict from Room
-          </button>
-          ` : ''}
         </div>
 
         <div class="pause-footer">
@@ -220,17 +207,17 @@ export const pauseMenuUI = {
       });
     }
 
-    const saveQuitBtn = document.getElementById('pause-save-quit');
-    if (saveQuitBtn) {
-      saveQuitBtn.addEventListener('click', async () => {
-        await this._handleSaveAndQuit();
-      });
-    }
-
-    const evictBtn = document.getElementById('pause-evict');
-    if (evictBtn) {
-      evictBtn.addEventListener('click', async () => {
-        await this._handleEvict();
+    const endRunBtn = document.getElementById('pause-end-run');
+    if (endRunBtn) {
+      endRunBtn.addEventListener('click', async () => {
+        this._setButtonsDisabled(true);
+        try {
+          if (this._onQuit) await this._onQuit('end');
+          this.close();
+        } catch (err) {
+          console.error('Could not end the run:', err);
+          this._setButtonsDisabled(false);
+        }
       });
     }
 
@@ -256,92 +243,6 @@ export const pauseMenuUI = {
         const hint = document.querySelector('.hud-controls-hint');
         if (hint) hint.style.display = hintToggle.checked ? '' : 'none';
       });
-    }
-  },
-
-  async _handleSaveAndQuit() {
-    const player = authState.player;
-    const uid = authState.currentUser?.uid;
-    const roomCode = gameState.roomCode;
-
-    // Disable buttons to prevent double-click
-    this._setButtonsDisabled(true);
-
-    try {
-      // 1. Snapshot position and memory log onto player before saving
-      this._snapshotSessionState();
-
-      // 2. Save player stats
-      if (player) {
-        await databaseService.savePlayerProgress(player);
-      }
-
-      // 2. Save a lightweight checkpoint (last room + timestamp)
-      if (uid) {
-        await databaseService.saveGameCheckpoint(uid, {
-          roomCode: roomCode || null,
-          savedAt: Date.now()
-        });
-      }
-
-      // 3. Mark player offline in room (but keep record)
-      if (roomCode && uid) {
-        await roomService.markOffline(roomCode, uid);
-        await roomService.setActiveRoom(uid, null);
-      }
-
-      this.close();
-      if (this._onQuit) this._onQuit('quit');
-    } catch (err) {
-      console.error('Save & Quit failed:', err);
-      this._setButtonsDisabled(false);
-    }
-  },
-
-  async _handleEvict() {
-    const uid = authState.currentUser?.uid;
-    const roomCode = gameState.roomCode;
-
-    if (!roomCode || !uid) {
-      this.close();
-      if (this._onQuit) this._onQuit('evict');
-      return;
-    }
-
-    this._setButtonsDisabled(true);
-
-    try {
-      // Save position and memory log, then player progress before leaving
-      this._snapshotSessionState();
-      if (authState.player) {
-        await databaseService.savePlayerProgress(authState.player);
-      }
-
-      // Mark player as evicted (online: false, evicted: true) but keep their record
-      await roomService.evictFromRoom(roomCode, uid);
-      await roomService.setActiveRoom(uid, null);
-
-      this.close();
-      if (this._onQuit) this._onQuit('evict');
-    } catch (err) {
-      console.error('Evict failed:', err);
-      this._setButtonsDisabled(false);
-    }
-  },
-
-  _snapshotSessionState() {
-    const player = authState.player;
-    if (!player) return;
-
-    // Persist current world position
-    if (this._localPlayerRef) {
-      const pos = this._localPlayerRef.getPosition();
-      player.lastPosition = { x: pos.x, y: pos.y, z: pos.z };
-    }
-
-    // Persist memory log contents
-    if (this._memoryLogRef) {
-      player.memoryLog = this._memoryLogRef.toJSON();
     }
   },
 

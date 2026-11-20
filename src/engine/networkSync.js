@@ -12,7 +12,8 @@ export class NetworkSync {
 
     this.remotePlayers = new Map();
     this.lastBroadcastTime = 0;
-    this.broadcastRate = 50;
+    this.broadcastRate = 100;
+    this.lastBroadcastTransform = null;
     this.unsubscribe = null;
 
     this.initSync();
@@ -32,21 +33,29 @@ export class NetworkSync {
   }
 
   broadcastTransform() {
-    const pos = this.localPlayer.getPosition();
-    const rotY = this.localPlayer.getRotation();
+    const transform = this.getTransformState();
 
     const myTransformRef = ref(rtdb, `rooms/${this.roomCode}/transforms/${this.localUid}`);
     set(myTransformRef, {
+      ...transform,
+      color: this.colorHex,
+      displayName: this.localPlayer.displayName,
+      t: Date.now()
+    });
+    this.lastBroadcastTransform = transform;
+    this.lastBroadcastTime = performance.now();
+  }
+
+  getTransformState() {
+    const pos = this.localPlayer.getPosition();
+    return {
       x: Number(pos.x.toFixed(2)),
       y: Number(pos.y.toFixed(2)),
       z: Number(pos.z.toFixed(2)),
-      rotY: Number(rotY.toFixed(3)),
-      color: this.colorHex,
-      displayName: this.localPlayer.displayName,
+      rotY: Number(this.localPlayer.getRotation().toFixed(3)),
       hp: this.localPlayer.hp,
-      maxHp: this.localPlayer.maxHp,
-      t: Date.now()
-    });
+      maxHp: this.localPlayer.maxHp
+    };
   }
 
   handleRemoteTransforms(transformsData) {
@@ -87,8 +96,12 @@ export class NetworkSync {
 
   update(currentTime, deltaTime) {
     if (currentTime - this.lastBroadcastTime >= this.broadcastRate) {
-      this.lastBroadcastTime = currentTime;
-      this.broadcastTransform();
+      const currentTransform = this.getTransformState();
+      const hasChanged = !this.lastBroadcastTransform
+        || Object.keys(currentTransform).some(
+          key => currentTransform[key] !== this.lastBroadcastTransform[key]
+        );
+      if (hasChanged) this.broadcastTransform();
     }
 
     for (const remoteAgent of this.remotePlayers.values()) {

@@ -1,5 +1,4 @@
 import { authState } from '../state/authState.js';
-import { databaseService } from '../services/databaseService.js';
 
 /**
  * Agent Dossier — single combined panel for Grid Storage + Memory Log.
@@ -283,7 +282,7 @@ export const agentDossierUI = {
           this.selectedItem = null;
           this.selectedItemIndex = -1;
           if (this._logInstance) player.memoryLog = this._logInstance.toJSON();
-          await databaseService.savePlayerProgress(player);
+          window.dispatchEvent(new CustomEvent('run-state-changed'));
           this._render();
           window.dispatchEvent(new CustomEvent('update-vitals'));
         });
@@ -297,7 +296,7 @@ export const agentDossierUI = {
           this.selectedItem = null;
           this.selectedItemIndex = -1;
           if (this._logInstance) player.memoryLog = this._logInstance.toJSON();
-          await databaseService.savePlayerProgress(player);
+          window.dispatchEvent(new CustomEvent('run-state-changed'));
           this._render();
           window.dispatchEvent(new CustomEvent('update-vitals'));
         });
@@ -310,7 +309,7 @@ export const agentDossierUI = {
           this.selectedItem = null;
           this.selectedItemIndex = -1;
           if (this._logInstance) player.memoryLog = this._logInstance.toJSON();
-          await databaseService.savePlayerProgress(player);
+          window.dispatchEvent(new CustomEvent('run-state-changed'));
           this._render();
           window.dispatchEvent(new CustomEvent('update-vitals'));
         });
@@ -322,6 +321,7 @@ export const agentDossierUI = {
       modal.querySelectorAll('.flag-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           log.toggleFlagDirective(btn.dataset.id);
+          window.dispatchEvent(new CustomEvent('run-state-changed'));
           this._render();
         });
       });

@@ -4,8 +4,14 @@ import { gameState } from '../state/gameState.js';
 
 export const chatUI = {
   isInitialized: false,
+  unsubscribeMessages: null,
 
   init(container) {
+    if (this.unsubscribeMessages) {
+      this.unsubscribeMessages();
+      this.unsubscribeMessages = null;
+    }
+
     let el = document.getElementById('chat-widget');
     if (!el) {
       el = document.createElement('div');
@@ -27,9 +33,16 @@ export const chatUI = {
     }
 
     if (gameState.roomCode) {
-      chatService.subscribeToMessages(gameState.roomCode, (msg) => {
+      this.unsubscribeMessages = chatService.subscribeToMessages(gameState.roomCode, (msg) => {
         this.showBubble(msg);
       });
+    }
+  },
+
+  destroy() {
+    if (this.unsubscribeMessages) {
+      this.unsubscribeMessages();
+      this.unsubscribeMessages = null;
     }
   },
 
@@ -89,7 +102,9 @@ export const chatUI = {
         if (!text) return;
 
         const uid = authState.currentUser ? authState.currentUser.uid : 'solo';
-        const name = authState.currentUser ? authState.currentUser.displayName : 'Agent';
+        const name = gameState.currentRoom?.players?.[uid]?.displayName
+          || authState.currentUser?.displayName
+          || 'Agent';
 
         if (gameState.roomCode) {
           chatService.sendMessage(gameState.roomCode, uid, name, text);

@@ -1,14 +1,17 @@
 import { roomService, AGENT_PALETTE } from '../services/roomService.js';
+import { runSessionService } from '../services/runSessionService.js';
 import { gameState } from '../state/gameState.js';
 import { authState } from '../state/authState.js';
 
 export const lobbyUI = {
   container: null,
   errorMessage: '',
+  unsubscribeState: null,
 
   init(containerElement) {
     this.container = containerElement;
-    gameState.subscribe(() => this.render());
+    if (this.unsubscribeState) this.unsubscribeState();
+    this.unsubscribeState = gameState.subscribe(() => this.render());
     this.render();
   },
 
@@ -48,7 +51,7 @@ export const lobbyUI = {
 
         <div class="button-stack">
           <button type="button" id="btn-join-room" class="secondary">Join Squad</button>
-          <button type="button" id="btn-back-profile" class="secondary">Back to Agent Dossier</button>
+          <button type="button" id="btn-back-profile" class="secondary">Back</button>
         </div>
 
         ${this.errorMessage ? `<p class="error-text">${this.errorMessage}</p>` : ''}
@@ -59,11 +62,8 @@ export const lobbyUI = {
       this.errorMessage = '';
       try {
         const uid = authState.currentUser?.uid;
-        // One-room rule: evict from any previous room before creating a new one
-        if (uid) await roomService.ensureSingleRoom(uid);
         const code = await roomService.createRoom(authState.currentUser);
-        // Track active room on player profile
-        if (uid) await roomService.setActiveRoom(uid, code);
+        runSessionService.setActiveRun(uid, { mode: 'multiplayer', roomCode: code });
         this.listenToRoom(code);
       } catch (err) {
         this.errorMessage = err.message;
@@ -84,11 +84,8 @@ export const lobbyUI = {
 
       try {
         const uid = authState.currentUser?.uid;
-        // One-room rule: evict from any previous room before joining a new one
-        if (uid) await roomService.ensureSingleRoom(uid);
         await roomService.joinRoom(code, authState.currentUser);
-        // Track active room on player profile
-        if (uid) await roomService.setActiveRoom(uid, code);
+        runSessionService.setActiveRun(uid, { mode: 'multiplayer', roomCode: code });
         this.listenToRoom(code);
       } catch (err) {
         this.errorMessage = err.message;
@@ -108,9 +105,13 @@ export const lobbyUI = {
 
     gameState.unsubscribeRoom = roomService.subscribeToRoom(code, (data) => {
       if (!data) {
+        const wasInGame = gameState.isInGame;
+        runSessionService.clearActiveRun(authState.currentUser?.uid);
         gameState.clearRoom();
-        this.errorMessage = 'Room was disbanded or expired.';
-        this.render();
+        this.errorMessage = wasInGame
+          ? 'The multiplayer room ended or expired.'
+          : 'Room ended or expired after four hours without player input.';
+        if (!wasInGame) this.render();
         return;
       }
       gameState.setRoom(code, data);
@@ -184,7 +185,7 @@ export const lobbyUI = {
         <p class="subtitle" style="margin-bottom: 0.5rem;">Secure Relay Code:</p>
         <div style="background: #0d1522; padding: 0.75rem; text-align: center; border: 1px dashed #00d9ff; margin-bottom: 1rem;">
           <span style="font-size: 1.75rem; letter-spacing: 0.25em; color: #00f0ff; font-weight: bold;">${code}</span>
-          <div style="font-size: 0.7rem; color: #718096; margin-top: 0.25rem;">Share with allies (Expires after 5 min empty)</div>
+          <div style="font-size: 0.7rem; color: #718096; margin-top: 0.25rem;">Room expires after four hours without player input.</div>
         </div>
 
         <!-- Color Selector Swatches -->
@@ -242,7 +243,7 @@ export const lobbyUI = {
 
     document.getElementById('btn-leave-room').addEventListener('click', async () => {
       await roomService.leaveRoom(code, currentUid);
-      await roomService.setActiveRoom(currentUid, null);
+      runSessionService.clearActiveRun(currentUid);
       gameState.clearRoom();
     });
   }

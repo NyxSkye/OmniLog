@@ -2,6 +2,21 @@
 
 An emergent, multi-genre 3D multiplayer deduction RPG (2–8 players). 
 
+## Release Shape
+
+### Version 1 — Web Chapter
+
+* Guest-only access; no email account or persistent player profile.
+* Each guest receives an editable generated callsign; duplicate names in a squad get a suffix.
+* Solo runs need no room. Multiplayer runs use a temporary room code.
+* Refreshing resumes the current run. Solo snapshots stay in the browser; multiplayer snapshots sync to the room every ten seconds and on important changes. Snapshots overwrite the current run state and expire after four hours without player input. Logging out ends that player's participation; remaining teammates may continue.
+* A compact area, a focused piece of the lore, an intriguing story, and the core fighting experience.
+
+### Version 2 — Downloadable Continuation
+
+* The larger world and full lore, lasting progression, extended skills, and custom characters.
+* A completion code from Version 1 may carry a story choice forward if the story benefits from it.
+
 Players awaken as amnesiac blank slates thrust into dimensional breaches. To uncover the ultimate truth of the multiverse and reach the True Ending, teams must balance investigation, dynamic combat, and supply management while discerning factual clues from deceptive System guidance.
 
 ---
@@ -54,8 +69,9 @@ Combat is real-time and fluid, combining three distinct disciplines alongside un
 
 | Component | Specification |
 | :--- | :--- |
-| **Platform** | Desktop 3D Multiplayer (2–8 players, Room Code matchmaking) |
-| **Initial State** | Amnesiac Agent (Zero magic, base attributes, empty grid inventory) |
+| **Platform** | V1 web game: solo runs or 2–8 player room-code multiplayer |
+| **Initial State** | Guest identity; fixed character appearance; base attributes |
+| **Run State** | Refresh-resumable temporary snapshots; expires after four hours without player input |
 | **Safe Zones** | Sanctuaries (HP recovery, SP allocation) & Outpost vendors |
 | **Combat Model** | Real-time FPS/TPS: Firearms + Melee + Unlockable Arcana + Wave Breaches |
 | **Investigation** | 3D Environmental Inspection, Memory Log, Key NPC Evidence Exchanges |

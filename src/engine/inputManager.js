@@ -17,24 +17,38 @@ export class InputManager {
   }
 
   initEvents() {
-    this.canvas.addEventListener('click', () => {
+    this.handleCanvasClick = () => {
       if (!this.isPointerLocked) {
         this.canvas.requestPointerLock();
       }
-    });
+    };
 
-    document.addEventListener('pointerlockchange', () => {
+    this.handlePointerLockChange = () => {
       this.isPointerLocked = document.pointerLockElement === this.canvas;
-    });
+    };
 
-    document.addEventListener('mousemove', (e) => {
+    this.handleMouseMove = (e) => {
       if (this.isPointerLocked && this.onMouseLook) {
         this.onMouseLook(e.movementX, e.movementY);
       }
-    });
+    };
 
-    window.addEventListener('keydown', (e) => this.onKeyChange(e.code, true));
-    window.addEventListener('keyup', (e) => this.onKeyChange(e.code, false));
+    this.handleKeyDown = e => this.onKeyChange(e.code, true);
+    this.handleKeyUp = e => this.onKeyChange(e.code, false);
+
+    this.canvas.addEventListener('click', this.handleCanvasClick);
+    document.addEventListener('pointerlockchange', this.handlePointerLockChange);
+    document.addEventListener('mousemove', this.handleMouseMove);
+    window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+  }
+
+  destroy() {
+    this.canvas.removeEventListener('click', this.handleCanvasClick);
+    document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
+    document.removeEventListener('mousemove', this.handleMouseMove);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
   }
 
   onKeyChange(code, isPressed) {

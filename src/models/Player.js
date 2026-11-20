@@ -1,5 +1,5 @@
 export class Player {
-  constructor(uid, displayName = 'Agent Unknown') {
+  constructor(uid, displayName = 'Agent') {
     this.uid = uid;
     this.displayName = displayName;
     this.level = 1;
@@ -59,7 +59,7 @@ export class Player {
     return null;
   }
 
-  toFirestore() {
+  toJSON() {
     return {
       uid: this.uid,
       displayName: this.displayName,
@@ -71,12 +71,11 @@ export class Player {
       items: this.items,
       cluesFound: this.cluesFound,
       lastPosition: this.lastPosition || { x: 0, y: 0, z: 0 },
-      memoryLog: this.memoryLog || null,
-      lastSaved: Date.now()
+      memoryLog: this.memoryLog || null
     };
   }
 
-  static fromFirestore(data) {
+  static fromJSON(data) {
     const p = new Player(data.uid, data.displayName);
     Object.assign(p, data);
     return p;

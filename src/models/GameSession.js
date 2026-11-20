@@ -4,6 +4,7 @@ export class GameSession {
     this.hostUid = hostUid;
     this.status = 'LOBBY'; // LOBBY | IN_PROGRESS | CASE_CLOSED
     this.createdAt = Date.now();
+    this.lastActivityAt = this.createdAt;
     this.maxPlayers = 8;
     this.minPlayers = 2;
     this.players = {
@@ -29,6 +30,7 @@ export class GameSession {
       hostUid: this.hostUid,
       status: this.status,
       createdAt: this.createdAt,
+      lastActivityAt: this.lastActivityAt,
       maxPlayers: this.maxPlayers,
       minPlayers: this.minPlayers,
       players: this.players
