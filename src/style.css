@@ -99,6 +99,24 @@ body, html, #app {
   margin-bottom: 1rem;
 }
 
+.character-choices {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.character-choice {
+  background: #0d1522;
+  border-color: #2d3748;
+  color: #a0aec0;
+}
+
+.character-choice.selected {
+  background: rgba(0, 217, 255, 0.12);
+  border-color: #00d9ff;
+  color: #00f0ff;
+}
+
 label {
   display: block;
   font-size: 0.75rem;
@@ -460,6 +478,46 @@ button.secondary:hover {
 }
 
 /* Color Selector Swatch Buttons */
+.color-picker-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  padding: 4px;
+  border: 1px solid #718096;
+  border-radius: 50%;
+  background: #0d1522;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.color-picker-button svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: #00f0ff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.color-picker-button:hover {
+  transform: scale(1.15);
+  border-color: #00f0ff;
+  box-shadow: 0 0 8px #00f0ff;
+}
+
+.custom-color-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .color-swatch-btn {
   width: 28px !important;
   height: 28px !important;
@@ -483,6 +541,14 @@ button.secondary:hover {
 .color-swatch-btn.taken-swatch {
   opacity: 0.35;
   filter: grayscale(40%);
+}
+
+.color-swatch-btn:disabled {
+  cursor: not-allowed;
+}
+
+.color-swatch-btn.taken-swatch:hover {
+  transform: none;
 }
 
 /* ============================================================

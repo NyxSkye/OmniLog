@@ -7,9 +7,11 @@ An emergent, multi-genre 3D multiplayer deduction RPG (2–8 players).
 ### Version 1 — Web Chapter
 
 * Guest-only access; no email account or persistent player profile.
-* Each guest receives an editable generated callsign; duplicate names in a squad get a suffix.
+* Each guest chooses a male or female starter model and receives an editable generated callsign; duplicate names in a squad get a suffix.
+* Squad colors are unique; players can choose an available palette color or pick a custom color.
+* Starter models are loaded from `public/assets/models/male.glb` and `public/assets/models/female.glb`.
 * Solo runs need no room. Multiplayer runs use a temporary room code.
-* Refreshing resumes the current run. Solo snapshots stay in the browser; multiplayer snapshots sync to the room every ten seconds and on important changes. Snapshots overwrite the current run state and expire after four hours without player input. Logging out ends that player's participation; remaining teammates may continue.
+* Anyone with a room code can join an active multiplayer run while capacity remains. Late joiners see the lobby to choose their color and confirm readiness, then enter the active mission without a new launch; players without a saved room run start at the origin. Refreshing resumes the current run. Solo snapshots stay in the browser; multiplayer snapshots sync to the room every ten seconds and on important changes. Snapshots overwrite the current run state and expire after four hours without player input. Logging out ends that player's participation; remaining teammates may continue.
 * A compact area, a focused piece of the lore, an intriguing story, and the core fighting experience.
 
 ### Version 2 — Downloadable Continuation
@@ -70,7 +72,7 @@ Combat is real-time and fluid, combining three distinct disciplines alongside un
 | Component | Specification |
 | :--- | :--- |
 | **Platform** | V1 web game: solo runs or 2–8 player room-code multiplayer |
-| **Initial State** | Guest identity; fixed character appearance; base attributes |
+| **Initial State** | Guest identity; selectable male or female starter appearance; base attributes |
 | **Run State** | Refresh-resumable temporary snapshots; expires after four hours without player input |
 | **Safe Zones** | Sanctuaries (HP recovery, SP allocation) & Outpost vendors |
 | **Combat Model** | Real-time FPS/TPS: Firearms + Melee + Unlockable Arcana + Wave Breaches |

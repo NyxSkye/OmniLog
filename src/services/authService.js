@@ -30,6 +30,20 @@ export function normalizeCallsign(value) {
 export const authService = {
   // Holds a callsign until Firebase's auth-state callback sees the guest user.
   _pendingCallsign: null,
+  _pendingCharacterType: null,
+
+  getCharacterType(uid) {
+    return localStorage.getItem(`omnilog:character-type:${uid}`) === 'female'
+      ? 'female'
+      : 'male';
+  },
+
+  setCharacterType(uid, characterType) {
+    localStorage.setItem(
+      `omnilog:character-type:${uid}`,
+      characterType === 'female' ? 'female' : 'male'
+    );
+  },
 
   // Listen to auth state transitions
   onAuthChange(callback) {
@@ -37,10 +51,13 @@ export const authService = {
   },
 
   // Anonymous instant guest play
-  async loginAsGuest(customName = generateCallsign()) {
+  async loginAsGuest(customName = generateCallsign(), characterType = 'male') {
     const callsign = normalizeCallsign(customName) || generateCallsign();
+    const selectedCharacter = characterType === 'female' ? 'female' : 'male';
     this._pendingCallsign = callsign;
+    this._pendingCharacterType = selectedCharacter;
     const credential = await signInAnonymously(auth);
+    this.setCharacterType(credential.user.uid, selectedCharacter);
     await this.setGuestCallsign(credential.user, callsign);
     return credential.user;
   },

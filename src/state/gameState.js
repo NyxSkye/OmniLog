@@ -17,9 +17,12 @@ export const gameState = {
   },
 
   setRoom(roomCode, roomData) {
+    const missionJustStarted = this.roomCode === roomCode
+      && this.currentRoom?.status === 'LOBBY'
+      && roomData?.status === 'IN_PROGRESS';
     this.roomCode = roomCode;
     this.currentRoom = roomData;
-    if (roomData && roomData.status === 'IN_PROGRESS') {
+    if (missionJustStarted) {
       this.isInGame = true;
     }
     this.notify();

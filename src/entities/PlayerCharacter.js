@@ -1,10 +1,12 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export class PlayerCharacter {
-  constructor(scene, isLocal = true, displayName = 'Agent', colorHex = '#00f0ff', initialHp = 100, maxHp = 100) {
+  constructor(scene, isLocal = true, displayName = 'Agent', characterType = 'male', colorHex = '#00f0ff', initialHp = 100, maxHp = 100) {
     this.scene = scene;
     this.isLocal = isLocal;
     this.displayName = displayName;
+    this.characterType = characterType === 'female' ? 'female' : 'male';
     this.colorHex = colorHex;
     this.colorNum = parseInt(colorHex.replace('#', ''), 16);
     this.hp = initialHp;
@@ -27,6 +29,7 @@ export class PlayerCharacter {
     this.buildMesh();
     this.buildNameplate();
     this.scene.add(this.group);
+    this.loadCharacterModel();
   }
 
   buildMesh() {
@@ -42,14 +45,63 @@ export class PlayerCharacter {
     const body = new THREE.Mesh(bodyGeo, bodyMat);
     body.position.y = 1.0;
     body.castShadow = true;
-    this.group.add(body);
+    this.placeholder = new THREE.Group();
+    this.placeholder.add(body);
 
     // Visor
     const visorGeo = new THREE.BoxGeometry(0.42, 0.16, 0.32);
     const visorMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const visor = new THREE.Mesh(visorGeo, visorMat);
     visor.position.set(0, 1.4, 0.4);
-    this.group.add(visor);
+    this.placeholder.add(visor);
+    this.group.add(this.placeholder);
+  }
+
+  loadCharacterModel() {
+    const modelPath = `/assets/models/${this.characterType}.glb`;
+    new GLTFLoader().load(
+      modelPath,
+      (gltf) => {
+        const model = gltf.scene;
+        if (this.isDestroyed) {
+          model.traverse(object => {
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) {
+              if (Array.isArray(object.material)) object.material.forEach(material => material.dispose());
+              else object.material.dispose();
+            }
+          });
+          return;
+        }
+
+        const initialBounds = new THREE.Box3().setFromObject(model);
+        const height = initialBounds.getSize(new THREE.Vector3()).y;
+        if (!Number.isFinite(height) || height <= 0) {
+          console.error(`Character model has invalid dimensions: ${modelPath}`);
+          return;
+        }
+
+        model.scale.setScalar(2 / height);
+        model.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(model);
+        model.position.x -= (bounds.min.x + bounds.max.x) / 2;
+        model.position.y -= bounds.min.y;
+        model.position.z -= (bounds.min.z + bounds.max.z) / 2;
+        model.traverse(object => {
+          if (object.isMesh) {
+            object.castShadow = true;
+            object.receiveShadow = true;
+          }
+        });
+
+        this.placeholder.visible = false;
+        this.group.add(model);
+      },
+      undefined,
+      (error) => {
+        console.error(`Could not load character model ${modelPath}:`, error);
+      }
+    );
   }
 
   buildNameplate() {
@@ -203,6 +255,7 @@ export class PlayerCharacter {
   }
 
   destroy() {
+    this.isDestroyed = true;
     this.scene.remove(this.group);
     if (this.texture) this.texture.dispose();
     this.group.traverse((obj) => {

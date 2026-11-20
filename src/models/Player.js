@@ -1,7 +1,8 @@
 export class Player {
-  constructor(uid, displayName = 'Agent') {
+  constructor(uid, displayName = 'Agent', characterType = 'male') {
     this.uid = uid;
     this.displayName = displayName;
+    this.characterType = characterType === 'female' ? 'female' : 'male';
     this.level = 1;
     this.sp = 0;
 
@@ -63,6 +64,7 @@ export class Player {
     return {
       uid: this.uid,
       displayName: this.displayName,
+      characterType: this.characterType,
       level: this.level,
       sp: this.sp,
       role: this.role,
@@ -76,7 +78,7 @@ export class Player {
   }
 
   static fromJSON(data) {
-    const p = new Player(data.uid, data.displayName);
+    const p = new Player(data.uid, data.displayName, data.characterType);
     Object.assign(p, data);
     return p;
   }

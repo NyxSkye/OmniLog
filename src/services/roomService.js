@@ -1,7 +1,7 @@
 import { ref, get, set, update, remove, onValue, onDisconnect, runTransaction } from 'firebase/database';
 import { rtdb } from '../config/firebase.js';
 import { GameSession } from '../models/GameSession.js';
-import { normalizeCallsign } from './authService.js';
+import { authService, normalizeCallsign } from './authService.js';
 import { RUN_EXPIRY_MS } from './runSessionService.js';
 
 const CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -39,6 +39,37 @@ function getUniqueCallsign(requestedName, players) {
     const uniqueName = `${baseName.slice(0, 24 - suffixText.length)}${suffixText}`;
     if (!takenNames.has(uniqueName.toLowerCase())) return uniqueName;
   }
+}
+
+function normalizeColorHex(color) {
+  return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)
+    ? color.toLowerCase()
+    : null;
+}
+
+function ensureUniquePlayerColors(players) {
+  const updatedPlayers = { ...(players || {}) };
+  const usedColors = new Set();
+  const orderedPlayers = Object.entries(updatedPlayers).sort(([, a], [, b]) =>
+    (a.joinedAt || 0) - (b.joinedAt || 0)
+  );
+
+  for (const [uid, player] of orderedPlayers) {
+    let color = normalizeColorHex(player.color);
+    if (!color || usedColors.has(color)) {
+      color = AGENT_PALETTE.find(candidate => !usedColors.has(candidate.toLowerCase()))?.toLowerCase();
+      if (!color) {
+        throw new Error('Could not assign a unique color to every squad member.');
+      }
+    }
+
+    usedColors.add(color);
+    if (player.color !== color) {
+      updatedPlayers[uid] = { ...player, color };
+    }
+  }
+
+  return updatedPlayers;
 }
 
 export const roomService = {
@@ -87,6 +118,7 @@ export const roomService = {
     session.players[hostUser.uid].online = true;
     session.players[hostUser.uid].hp = 100;
     session.players[hostUser.uid].maxHp = 100;
+    session.players[hostUser.uid].characterType = authService.getCharacterType(hostUser.uid);
     session.lastActivityAt = Date.now();
 
     await set(roomRef, session.toJSON());
@@ -134,67 +166,145 @@ export const roomService = {
       roomData = refreshedRoom.val();
     }
 
+    const playersRef = ref(rtdb, `rooms/${roomCode}/players`);
     const existingPlayer = roomData.players && roomData.players[user.uid];
 
     if (existingPlayer) {
-      const otherPlayers = Object.fromEntries(
-        Object.entries(roomData.players).filter(([uid]) => uid !== user.uid)
-      );
-      const currentCallsign = existingPlayer.displayName || '';
-      const requestedCallsign = /^Agent (Unknown|Guest|Host)$/i.test(currentCallsign)
-        ? user.displayName
-        : currentCallsign;
-      await update(ref(rtdb, `rooms/${roomCode}/players/${user.uid}`), {
-        online: true,
-        displayName: getUniqueCallsign(
-          requestedCallsign || user.displayName,
-          otherPlayers
-        )
-      });
+      const result = await runTransaction(playersRef, players => {
+        if (!players || !players[user.uid]) return;
+
+        const uniquePlayers = ensureUniquePlayerColors(players);
+        const currentPlayer = uniquePlayers[user.uid];
+        const otherPlayers = Object.fromEntries(
+          Object.entries(uniquePlayers).filter(([uid]) => uid !== user.uid)
+        );
+        const currentCallsign = currentPlayer.displayName || '';
+        const requestedCallsign = /^Agent (Unknown|Guest|Host)$/i.test(currentCallsign)
+          ? user.displayName
+          : currentCallsign;
+
+        return {
+          ...uniquePlayers,
+          [user.uid]: {
+            ...currentPlayer,
+            online: true,
+            isReady: roomData.status === 'IN_PROGRESS' ? false : currentPlayer.isReady,
+            characterType: authService.getCharacterType(user.uid),
+            displayName: getUniqueCallsign(
+              requestedCallsign || user.displayName,
+              otherPlayers
+            )
+          }
+        };
+      }, { applyLocally: false });
+      if (!result.committed) {
+        throw new Error('Could not rejoin the room. Please try again.');
+      }
       await this.touchRoomActivity(roomCode);
 
       const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}/online`);
       onDisconnect(onlineRef).set(false);
-      return roomData;
+      return { isNewPlayer: false };
     }
 
-    if (roomData.status !== 'LOBBY') {
-      throw new Error('Mission already in progress. Only existing squad members can rejoin.');
+    let alreadyJoined = false;
+    let capacityReached = false;
+    let noColorAvailable = false;
+    const result = await runTransaction(playersRef, players => {
+      alreadyJoined = false;
+      capacityReached = false;
+      noColorAvailable = false;
+
+      const uniquePlayers = ensureUniquePlayerColors(players || {});
+      if (uniquePlayers[user.uid]) {
+        alreadyJoined = true;
+        return uniquePlayers;
+      }
+
+      if (Object.keys(uniquePlayers).length >= (roomData.maxPlayers || 8)) {
+        capacityReached = true;
+        return;
+      }
+
+      const usedColors = new Set(
+        Object.values(uniquePlayers).map(player => normalizeColorHex(player.color))
+      );
+      const assignedColor = AGENT_PALETTE.find(color => !usedColors.has(color.toLowerCase()));
+      if (!assignedColor) {
+        noColorAvailable = true;
+        return;
+      }
+
+      return {
+        ...uniquePlayers,
+        [user.uid]: {
+          uid: user.uid,
+          displayName: getUniqueCallsign(user.displayName, uniquePlayers),
+          characterType: authService.getCharacterType(user.uid),
+          isReady: false,
+          color: assignedColor,
+          hp: 100,
+          maxHp: 100,
+          online: true,
+          joinedAt: Date.now()
+        }
+      };
+    }, { applyLocally: false });
+
+    if (!result.committed) {
+      if (capacityReached) {
+        throw new Error('Chamber is at maximum capacity (8 players).');
+      }
+      if (noColorAvailable) {
+        throw new Error('No unused agent colors are available.');
+      }
+      throw new Error('Could not join the room. Please try again.');
     }
 
-    const currentPlayers = Object.values(roomData.players || {});
-    if (currentPlayers.length >= (roomData.maxPlayers || 8)) {
-      throw new Error('Chamber is at maximum capacity (8 players).');
-    }
-
-    // Default color assigned strictly by join order
-    const nextSlotIndex = currentPlayers.length % AGENT_PALETTE.length;
-    const assignedColor = AGENT_PALETTE[nextSlotIndex];
-    const callsign = getUniqueCallsign(user.displayName, roomData.players);
-
-    const playerRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}`);
-    await set(playerRef, {
-      uid: user.uid,
-      displayName: callsign,
-      isReady: false,
-      color: assignedColor,
-      hp: 100,
-      maxHp: 100,
-      online: true,
-      joinedAt: Date.now()
-    });
     await this.touchRoomActivity(roomCode);
 
     const onlineRef = ref(rtdb, `rooms/${roomCode}/players/${user.uid}/online`);
     onDisconnect(onlineRef).set(false);
 
-    return roomData;
+    return { isNewPlayer: !alreadyJoined };
   },
 
   // Update chosen color live in the lobby
   async updatePlayerColor(roomCode, uid, newColorHex) {
-    const colorRef = ref(rtdb, `rooms/${roomCode}/players/${uid}/color`);
-    await set(colorRef, newColorHex);
+    const color = normalizeColorHex(newColorHex);
+    if (!color) {
+      throw new Error('Choose a valid six-digit hex color.');
+    }
+
+    let colorIsTaken = false;
+    const playersRef = ref(rtdb, `rooms/${roomCode}/players`);
+    const result = await runTransaction(playersRef, players => {
+      colorIsTaken = false;
+      if (!players || !players[uid]) return;
+
+      const uniquePlayers = ensureUniquePlayerColors(players);
+      colorIsTaken = Object.entries(uniquePlayers).some(
+        ([playerUid, player]) => playerUid !== uid
+          && normalizeColorHex(player.color) === color
+      );
+      if (colorIsTaken) return uniquePlayers;
+
+      return {
+        ...uniquePlayers,
+        [uid]: { ...uniquePlayers[uid], color }
+      };
+    }, { applyLocally: false });
+
+    if (!result.committed) {
+      if (!result.snapshot.val()?.[uid]) {
+        throw new Error('You are no longer in this room.');
+      }
+      throw new Error('Could not update your color. Please try again.');
+    }
+    if (colorIsTaken) {
+      throw new Error('That color is already taken. Choose another color.');
+    }
+
     await this.touchRoomActivity(roomCode);
   },
 

@@ -49,6 +49,10 @@ let isEndingRun = false;
 let gameKeydownHandler = null;
 let pendingRunSnapshot = null;
 
+function createPlayer(uid, displayName) {
+  return new Player(uid, displayName, authService.getCharacterType(uid));
+}
+
 function showToast(msg) {
   let toast = document.getElementById('pickup-toast');
   if (!toast) {
@@ -287,7 +291,7 @@ async function expireCurrentRun() {
     runSessionService.clearActiveRun(uid);
     teardownGame();
     gameState.clearRoom();
-    if (uid) authState.setPlayer(new Player(uid, authState.currentUser?.displayName || 'Agent'));
+    if (uid) authState.setPlayer(createPlayer(uid, authState.currentUser?.displayName || 'Agent'));
     switchView('auth');
     authUI.setNotice('Your run ended after four hours without player input.');
   } finally {
@@ -311,7 +315,7 @@ async function endCurrentRun() {
     runSessionService.clearActiveRun(uid);
     teardownGame();
     gameState.clearRoom();
-    if (uid) authState.setPlayer(new Player(uid, authState.currentUser?.displayName || 'Agent'));
+    if (uid) authState.setPlayer(createPlayer(uid, authState.currentUser?.displayName || 'Agent'));
     switchView('auth');
   } finally {
     isEndingRun = false;
@@ -325,7 +329,7 @@ function handleMissingRoom() {
   teardownGame();
   if (gameState.currentRoom) gameState.clearRoom();
   const uid = authState.currentUser?.uid;
-  if (uid) authState.setPlayer(new Player(uid, authState.currentUser?.displayName || 'Agent'));
+  if (uid) authState.setPlayer(createPlayer(uid, authState.currentUser?.displayName || 'Agent'));
   isEndingRun = false;
   switchView('auth');
   authUI.setNotice('The multiplayer room ended or expired. Your run has ended.');
@@ -344,7 +348,7 @@ function init3DWorld(snapshot = null) {
   if (snapshot?.player) {
     authState.setPlayer(Player.fromJSON(snapshot.player));
   } else if (!authState.player) {
-    authState.setPlayer(new Player(uid, authState.currentUser.displayName || 'Agent'));
+    authState.setPlayer(createPlayer(uid, authState.currentUser.displayName || 'Agent'));
   }
 
   collectedAnomalies = new Set([
@@ -376,6 +380,7 @@ function init3DWorld(snapshot = null) {
   const roomPlayer = gameState.currentRoom?.players?.[authState.currentUser?.uid];
   const myColorHex = roomPlayer?.color || getAgentColorHex(authState.currentUser?.uid);
   const callsign = roomPlayer?.displayName || authState.currentUser?.displayName || 'Agent';
+  const characterType = roomPlayer?.characterType || authState.player.characterType;
   authState.player.displayName = callsign;
 
   sceneManager = new SceneManager(canvas);
@@ -384,12 +389,13 @@ function init3DWorld(snapshot = null) {
     sceneManager.scene,
     true,
     callsign,
+    characterType,
     myColorHex,
     authState.player?.stats.currentHealth ?? 100,
     100
   );
 
-  const savedPos = snapshot?.position || authState.player?.lastPosition;
+  const savedPos = snapshot?.position || (isSolo ? authState.player?.lastPosition : null);
   if (savedPos) {
     localPlayer.group.position.set(savedPos.x || 0, savedPos.y || 0, savedPos.z || 0);
   }
@@ -638,7 +644,7 @@ uiRoot.addEventListener('start-solo-game', () => {
   const uid = authState.currentUser?.uid;
   if (!uid) return;
   authUI.setNotice('');
-  authState.setPlayer(new Player(uid, authState.currentUser.displayName || 'Agent'));
+  authState.setPlayer(createPlayer(uid, authState.currentUser.displayName || 'Agent'));
   lastActivityAt = Date.now();
   runSessionService.setActiveRun(uid, { mode: 'solo', lastActivityAt });
   isSolo = true;
@@ -653,7 +659,7 @@ async function restoreActiveRun(user, displayName) {
   if (activeRun.mode === 'solo' && activeRun.snapshot?.player) {
     if (runSessionService.isExpired(activeRun.snapshot.lastActivityAt)) {
       runSessionService.clearActiveRun(user.uid);
-      authState.setPlayer(new Player(user.uid, displayName));
+      authState.setPlayer(createPlayer(user.uid, displayName));
       authUI.setNotice('Your run ended after four hours without player input.');
       return true;
     }
@@ -667,19 +673,24 @@ async function restoreActiveRun(user, displayName) {
 
   if (activeRun.mode === 'solo') {
     runSessionService.clearActiveRun(user.uid);
-    authState.setPlayer(new Player(user.uid, displayName));
+    authState.setPlayer(createPlayer(user.uid, displayName));
     authUI.setNotice('The saved run could not be restored. A new run is ready.');
     return true;
   }
 
   if (activeRun.mode === 'multiplayer' && activeRun.roomCode) {
     try {
-      await roomService.joinRoom(activeRun.roomCode, user);
-      if (activeRun.snapshot?.player) {
+      const { isNewPlayer } = await roomService.joinRoom(activeRun.roomCode, user);
+      if (!isNewPlayer && activeRun.snapshot?.player) {
         pendingRunSnapshot = activeRun.snapshot;
         authState.setPlayer(Player.fromJSON(activeRun.snapshot.player));
       } else {
-        authState.setPlayer(new Player(user.uid, displayName));
+        pendingRunSnapshot = null;
+        runSessionService.setActiveRun(user.uid, {
+          mode: 'multiplayer',
+          roomCode: activeRun.roomCode
+        });
+        authState.setPlayer(createPlayer(user.uid, displayName));
       }
       switchView('lobby');
       lobbyUI.listenToRoom(activeRun.roomCode);
@@ -689,7 +700,7 @@ async function restoreActiveRun(user, displayName) {
       if (error.code === 'room/not-found' || error.code === 'room/expired') {
         runSessionService.clearActiveRun(user.uid);
       }
-      authState.setPlayer(new Player(user.uid, displayName));
+      authState.setPlayer(createPlayer(user.uid, displayName));
       authUI.setNotice(
         error.code === 'room/not-found' || error.code === 'room/expired'
           ? error.message
@@ -725,7 +736,7 @@ gameState.subscribe((state) => {
     }
   });
 
-  if (!isEndingRun && !isGameRunning && room.status === 'IN_PROGRESS') {
+  if (!isEndingRun && !isGameRunning && state.isInGame && room.status === 'IN_PROGRESS') {
     isSolo = false;
     init3DWorld();
     updateSquadHUD();
@@ -739,6 +750,10 @@ authService.onAuthChange(async (user) => {
       return;
     }
     authState.setUser(user);
+    const characterType = authService._pendingCharacterType
+      || authService.getCharacterType(user.uid);
+    authService.setCharacterType(user.uid, characterType);
+    authService._pendingCharacterType = null;
     let displayName = user.displayName || authService._pendingCallsign || '';
     authService._pendingCallsign = null;
     if (!displayName || /^Agent (Unknown|Guest|Host)$/i.test(displayName)) {
@@ -750,7 +765,7 @@ authService.onAuthChange(async (user) => {
       }
     }
     if (!await restoreActiveRun(user, displayName)) {
-      authState.setPlayer(new Player(user.uid, displayName));
+      authState.setPlayer(createPlayer(user.uid, displayName));
     }
   } else {
     if (networkSync) {

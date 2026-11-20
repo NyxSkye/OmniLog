@@ -40,6 +40,7 @@ export class NetworkSync {
       ...transform,
       color: this.colorHex,
       displayName: this.localPlayer.displayName,
+      characterType: this.localPlayer.characterType,
       t: Date.now()
     });
     this.lastBroadcastTransform = transform;
@@ -69,6 +70,7 @@ export class NetworkSync {
           this.scene,
           false,
           data.displayName || 'Ally',
+          data.characterType || 'male',
           data.color || '#ff9900',
           data.hp || 100,
           data.maxHp || 100

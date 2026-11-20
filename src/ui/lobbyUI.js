@@ -131,28 +131,37 @@ export const lobbyUI = {
     });
 
     const isCreator = room.hostUid === currentUid;
+    const isMissionInProgress = room.status === 'IN_PROGRESS';
     const me = playersMap[currentUid];
-    const myColor = me?.color || AGENT_PALETTE[0];
+    const storedColor = me?.color;
+    const myColor = typeof storedColor === 'string' && /^#[0-9a-f]{6}$/i.test(storedColor)
+      ? storedColor.toLowerCase()
+      : AGENT_PALETTE[0];
 
     const allGuestsReady = sortedPlayers.filter(p => p.uid !== room.hostUid).every(p => p.isReady);
     const canLaunch = isCreator && sortedPlayers.length >= 2 && allGuestsReady;
 
     // List of colors currently taken by other players
     const takenColors = new Set(
-      sortedPlayers.filter(p => p.uid !== currentUid).map(p => p.color)
+      sortedPlayers
+        .filter(p => p.uid !== currentUid)
+        .map(p => typeof p.color === 'string' ? p.color.toLowerCase() : null)
+        .filter(Boolean)
     );
 
     // Color picker HTML
     const swatchesHtml = AGENT_PALETTE.map(c => {
-      const isSelected = c === myColor;
-      const isTaken = takenColors.has(c);
+      const isSelected = c.toLowerCase() === myColor;
+      const isTaken = takenColors.has(c.toLowerCase());
 
       return `
         <button 
           type="button" 
           class="color-swatch-btn ${isSelected ? 'active-swatch' : ''} ${isTaken ? 'taken-swatch' : ''}" 
           data-color="${c}"
+          ${isTaken ? 'disabled' : ''}
           style="background: ${c};"
+          aria-label="${isTaken ? 'Color taken by teammate' : `Choose color ${c}`}"
           title="${isTaken ? 'Taken by teammate' : 'Select color'}"
         ></button>
       `;
@@ -161,7 +170,7 @@ export const lobbyUI = {
     const playerListHtml = sortedPlayers.map(p => {
       const isSelf = p.uid === currentUid;
       const dotColor = p.color || AGENT_PALETTE[0];
-      const isPlayerReady = p.uid === room.hostUid || p.isReady;
+      const isPlayerReady = (!isMissionInProgress && p.uid === room.hostUid) || p.isReady;
 
       return `
         <div class="status-item ${isSelf ? 'player-item-self' : ''}" style="margin-bottom: 0.5rem; padding: 0.65rem;">
@@ -187,11 +196,31 @@ export const lobbyUI = {
           <span style="font-size: 1.75rem; letter-spacing: 0.25em; color: #00f0ff; font-weight: bold;">${code}</span>
           <div style="font-size: 0.7rem; color: #718096; margin-top: 0.25rem;">Room expires after four hours without player input.</div>
         </div>
+        ${isMissionInProgress ? '<p class="subtitle">Mission in progress. Confirm ready to join.</p>' : ''}
 
         <!-- Color Selector Swatches -->
         <div style="margin-bottom: 1rem;">
           <label style="margin-bottom: 0.4rem;">Designate Visual Signifier (Your Color)</label>
           <div style="display: flex; gap: 0.5rem; justify-content: center; background: #0d1522; padding: 0.6rem; border: 1px solid #1a365d; border-radius: 4px;">
+            <button
+              type="button"
+              id="btn-custom-color"
+              class="color-picker-button"
+              aria-label="Choose a custom agent color"
+              title="Choose a custom color"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m14.2 5.2 4.6 4.6-2 2-1.3-1.3-8.7 8.7-3.1.6.6-3.1 8.7-8.7-1.3-1.3z" />
+                <path d="m12.4 7 4.6 4.6" />
+              </svg>
+            </button>
+            <input
+              type="color"
+              id="custom-color-picker"
+              class="custom-color-input"
+              value="${myColor}"
+              aria-label="Choose a custom agent color"
+            />
             ${swatchesHtml}
           </div>
         </div>
@@ -202,9 +231,17 @@ export const lobbyUI = {
             ${playerListHtml}
           </div>
         </div>
+        ${this.errorMessage ? `<p class="error-text">${this.errorMessage}</p>` : ''}
 
         <div class="button-stack">
-          ${!isCreator ? `
+          ${isMissionInProgress ? `
+            <button type="button" id="btn-toggle-ready">
+              ${me && me.isReady ? 'Cancel Ready' : 'Confirm Ready'}
+            </button>
+            <button type="button" id="btn-join-active" ${!me?.isReady ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
+              Join Active Mission
+            </button>
+          ` : !isCreator ? `
             <button type="button" id="btn-toggle-ready">
               ${me && me.isReady ? 'Cancel Ready' : 'Confirm Ready'}
             </button>
@@ -218,21 +255,47 @@ export const lobbyUI = {
       </div>
     `;
 
-    // Bind color swatch clicks
+    const updateMyColor = async color => {
+      this.errorMessage = '';
+      try {
+        await roomService.updatePlayerColor(code, currentUid, color);
+      } catch (error) {
+        this.errorMessage = error.message || 'Could not update your color.';
+        this.render();
+      }
+    };
+
     this.container.querySelectorAll('.color-swatch-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const chosenColor = btn.dataset.color;
-        await roomService.updatePlayerColor(code, currentUid, chosenColor);
+      btn.addEventListener('click', () => {
+        updateMyColor(btn.dataset.color);
       });
     });
 
-    if (!isCreator) {
+    document.getElementById('custom-color-picker').addEventListener('change', event => {
+      updateMyColor(event.target.value);
+    });
+    document.getElementById('btn-custom-color').addEventListener('click', () => {
+      const colorPicker = document.getElementById('custom-color-picker');
+      if (typeof colorPicker.showPicker === 'function') {
+        colorPicker.showPicker();
+      } else {
+        colorPicker.click();
+      }
+    });
+
+    if (isMissionInProgress || !isCreator) {
       document.getElementById('btn-toggle-ready').addEventListener('click', async () => {
         if (me) {
           await roomService.toggleReady(code, currentUid, me.isReady);
         }
       });
-    } else {
+    }
+
+    if (isMissionInProgress) {
+      document.getElementById('btn-join-active').addEventListener('click', () => {
+        if (me?.isReady) gameState.setInGame(true);
+      });
+    } else if (isCreator) {
       const startBtn = document.getElementById('btn-start-game');
       if (canLaunch && startBtn) {
         startBtn.addEventListener('click', async () => {

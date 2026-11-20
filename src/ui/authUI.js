@@ -10,6 +10,7 @@ export const authUI = {
   noticeMessage: '',
   unsubscribe: null,
   generatedCallsign: '',
+  selectedCharacter: 'male',
 
   init(containerElement) {
     this.container = containerElement;
@@ -40,6 +41,13 @@ export const authUI = {
         <h1 class="title">OmniLog // Terminal</h1>
         <p class="subtitle">A short breach. A story that stays with you.</p>
         <div class="form-group">
+          <label>Choose Your Character</label>
+          <div class="character-choices" role="group" aria-label="Choose your character">
+            <button type="button" class="character-choice ${this.selectedCharacter === 'male' ? 'selected' : ''}" data-character="male" aria-pressed="${this.selectedCharacter === 'male'}">Male</button>
+            <button type="button" class="character-choice ${this.selectedCharacter === 'female' ? 'selected' : ''}" data-character="female" aria-pressed="${this.selectedCharacter === 'female'}">Female</button>
+          </div>
+        </div>
+        <div class="form-group">
           <label for="agent-callsign">Your Callsign (editable)</label>
           <input type="text" id="agent-callsign" maxlength="24" />
           <small>Letters, numbers, spaces, hyphens, and underscores.</small>
@@ -52,14 +60,27 @@ export const authUI = {
       </div>
     `;
     document.getElementById('agent-callsign').value = this.generatedCallsign;
+    this.container.querySelectorAll('.character-choice').forEach(button => {
+      button.addEventListener('click', () => {
+        this.selectedCharacter = button.dataset.character;
+        this.container.querySelectorAll('.character-choice').forEach(choice => {
+          const isSelected = choice.dataset.character === this.selectedCharacter;
+          choice.classList.toggle('selected', isSelected);
+          choice.setAttribute('aria-pressed', String(isSelected));
+        });
+      });
+    });
 
     document.getElementById('btn-guest').addEventListener('click', async () => {
       const callsign = normalizeCallsign(document.getElementById('agent-callsign').value)
         || this.generatedCallsign;
+      const characterType = this.container.querySelector('.character-choice.selected')?.dataset.character
+        || this.selectedCharacter;
       try {
         this.noticeMessage = '';
         this.generatedCallsign = callsign;
-        await authService.loginAsGuest(callsign);
+        await authService.loginAsGuest(callsign, characterType);
+        this.selectedCharacter = 'male';
         this.generatedCallsign = generateCallsign();
       } catch (err) {
         this.renderAuthForm(err.message);
