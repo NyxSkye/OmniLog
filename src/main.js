@@ -509,7 +509,7 @@ function init3DWorld(snapshot = null) {
       networkSync.update(currentTime, deltaTime);
     }
 
-    cameraManager.update(localPlayer.getPosition());
+    cameraManager.update(localPlayer.getPosition(), deltaTime);
     sceneManager.render(cameraManager.camera);
 
     gameLoopFrame = requestAnimationFrame(gameLoop);
