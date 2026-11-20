@@ -9,7 +9,7 @@ An emergent, multi-genre 3D multiplayer deduction RPG (2–8 players).
 * Guest-only access; no email account or persistent player profile.
 * Each guest chooses a male or female starter model and receives an editable generated callsign; duplicate names in a squad get a suffix.
 * Squad colors are unique; players can choose an available palette color or pick a custom color.
-* Starter models are loaded from `public/assets/models/male.glb` and `public/assets/models/female.glb`.
+* Character models are loaded from `public/assets/models/OmniLog_Male.glb` and `public/assets/models/OmniLog_Female.glb`.
 * Solo runs need no room. Multiplayer runs use a temporary room code.
 * Anyone with a room code can join an active multiplayer run while capacity remains. Late joiners see the lobby to choose their color and confirm readiness, then enter the active mission without a new launch; players without a saved room run start at the origin. Refreshing resumes the current run. Solo snapshots stay in the browser; multiplayer snapshots sync to the room every ten seconds and on important changes. Snapshots overwrite the current run state and expire after four hours without player input. Logging out ends that player's participation; remaining teammates may continue.
 * A compact area, a focused piece of the lore, an intriguing story, and the core fighting experience.

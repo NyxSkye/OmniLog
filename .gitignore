@@ -5,6 +5,9 @@ node_modules/
 dist/
 dist-ssr/
 
+# Private 3D models (do not publish to source control until production)
+public/assets/models/*.glb
+
 # Environment files with sensitive API keys / secrets
 .env
 .env.local

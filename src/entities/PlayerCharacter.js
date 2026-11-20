@@ -58,7 +58,10 @@ export class PlayerCharacter {
   }
 
   loadCharacterModel() {
-    const modelPath = `/assets/models/${this.characterType}.glb`;
+    const modelFileName = this.characterType === 'female'
+      ? 'OmniLog_Female.glb'
+      : 'OmniLog_Male.glb';
+    const modelPath = `/assets/models/${modelFileName}`;
     new GLTFLoader().load(
       modelPath,
       (gltf) => {
